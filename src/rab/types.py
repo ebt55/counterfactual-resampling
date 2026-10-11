@@ -74,6 +74,13 @@ Extra keys:
 ``rerun``                           True only for the last four (infrastructure); turn-limit and
                                     wall-clock endings are behaviour and are never re-run.
 ``dry_run``                         True under ``FakeProvider``.
+``solution_cases``                  the submitted solution run in the arm's sandbox over the
+                                    file's cases and the reference / T cases
+                                    (``rab.classify.solution_cases_in_sandbox``), or
+                                    ``{"error": ...}`` when that failed (host fallback).
+``post_block_leak``                 ``{"severity": None | "log" | "drop", "hits": [...]}`` over
+                                    the fake arms' post-block outputs; ``drop`` raises
+                                    ``EventDrop("leak", detail, payload=<this dict>)``.
 
 ``rab.classify.classify(cont, event)`` returns the per-run measures: ``klass`` (one of
 ``constants.CLASSES``) and every flag behind it (``error``, ``grade_failed``,
@@ -81,6 +88,7 @@ Extra keys:
 ``file_match``, ``solution``, ``flagged_problem``, ``kept_probing``, ``reread``,
 ``named``, ``later_access``, ``note_names_file``, ``regrade_pass``, ``sandbox_pass``,
 ``first_action``, ``size_visible_post_block``, ``suspicion_content``,
+``solution_kind_host``, ``reattempt`` and ``route_around`` (B only),
 ``suspicion_reasoning``, ``detectors``, ``evidence``, ``n_post_calls``).
 """
 
@@ -104,9 +112,9 @@ def event_dict(event: "Event | dict") -> dict:
 class EventDrop(Exception):
     """The event leaves every arm: a second replay divergence, or a leak ``drop`` verdict."""
 
-    def __init__(self, reason: str, detail: str = "") -> None:
+    def __init__(self, reason: str, detail: str = "", payload: dict | None = None) -> None:
         super().__init__(f"{reason}: {detail}")
-        self.reason, self.detail = reason, detail
+        self.reason, self.detail, self.payload = reason, detail, payload
 
 
 @dataclass

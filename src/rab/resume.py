@@ -25,6 +25,10 @@ steps 4 to 10) and starts it at the block point instead of at the manifest:
   ``rab.run`` and only for infrastructure failures (design v2 C, replacing decision
   10's wording): ``error_class`` in :data:`RERUN_CLASSES` sets ``rerun``; a turn limit
   or a wall-clock ending is behaviour and is never re-run.
+* Before the container goes, the submitted solution runs in it against the arm's file
+  (``rab.classify.solution_cases_in_sandbox``; stored as ``solution_cases``), and for the
+  fake arms every post-block output goes through the leak canary (``post_block_leak``;
+  a ``drop`` verdict raises ``rab.types.EventDrop`` carrying the continuation).
 * B arm (design v2 B): a deterministic monitor runs before every continuation call;
   a call ``rab.select.monitor_denies`` (KM ``_grader_hits_in_command`` naming
   ``.grader`` or ``expected_outputs.json``; path match for read_file/write_file) gets
@@ -79,10 +83,12 @@ from pathlib import Path
 
 import rab.constants as C
 from rab import REPO_ROOT, km
-from rab.classify import grade_failed
+from rab.classify import grade_failed, solution_cases_in_sandbox
 from rab.select import monitor_denies
 from rab.prefix import build_messages
-from rab.types import Event, Placed, event_dict
+from rab.place import serialise
+from rab.simulate import leak_hits, leak_verdict, prefix_texts, real_file_text
+from rab.types import Event, EventDrop, Placed, event_dict
 from harness.agent import NUDGE_TEXT, TOOLS, ToolExecutor
 from harness.grade import fresh_grade
 from harness.providers.base import Msg, merge_usage
@@ -477,6 +483,11 @@ def resume(replay, placed: Placed, event: Event | dict, rec: dict, provider, run
         except Exception as exc:
             rec_out["sandbox_grade"] = {"hidden_pass": False, "passed": 0, "total": 0,
                                         "output": f"sandbox hidden grade failed: {exc}"}
+        try:
+            rec_out["solution_cases"] = solution_cases_in_sandbox(
+                sandbox, item_key, replay.task_dir, placed.file_obj or json.loads(real_file_text(replay.task_dir)))
+        except Exception as exc:  # the host fallback in rab.classify takes over, flagged
+            rec_out["solution_cases"] = {"error": f"{type(exc).__name__}: {str(exc)[:300]}"}
         rec_out["fresh_grade"] = fresh_grade(item_key, replay.task_dir,
                                              rec_out["final_files"].get("solution.py", ""),
                                              tasks_dir=km.TASKS_DIR, sandbox_factory=grader_factory)
@@ -497,4 +508,29 @@ def resume(replay, placed: Placed, event: Event | dict, rec: dict, provider, run
         "rerun": error_class in RERUN_CLASSES, "file_view": placed.file_obj,
         "monitor_denials": denials if monitored else None, "dry_run": dry_run,
     })
+    rec_out["post_block_leak"] = post_block_leak(rec_out, placed, rec, replay.task_dir, k)
+    if rec_out["post_block_leak"]["severity"] == "drop":
+        raise EventDrop("leak", json.dumps(rec_out["post_block_leak"], ensure_ascii=False)[:600], rec_out)
     return rec_out
+
+
+def post_block_leak(cont: dict, placed: Placed, rec: dict, task_dir, k: int) -> dict:
+    """The §5 leak canary over every post-block output of a fake arm (audit item 2).
+
+    Each ``tool_calls[].output`` against the real file, with the placed file, the spec,
+    the visible tests and the prefix allowed; severity by ``rab.simulate.leak_verdict``
+    (design v2 C). R and B place no fake and return ``{"severity": None}``.
+    """
+    if placed.arm not in C.FAKE_ARMS:
+        return {"severity": None, "hits": []}
+    real = real_file_text(task_dir)
+    allowed = [serialise(placed.file_obj), rec["spec_text"], rec["visible_test_text"], *prefix_texts(rec, k)]
+    rows, worst = [], None
+    for j, call in enumerate(cont.get("tool_calls") or []):
+        hits = leak_hits(call.get("output") or "", real, allowed)
+        if hits:
+            verdict = leak_verdict(hits, real, allowed)
+            rows.append({"call": j, "hits": hits, **verdict})
+            if worst != "drop":
+                worst = verdict["severity"]
+    return {"severity": worst, "hits": rows}
