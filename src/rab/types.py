@@ -186,6 +186,7 @@ class Sim:
     fenced: bool = False        # the accepted (or last) reply was wrapped in a ``` block
     event_id: str = ""
     detail: str | None = None   # schema failure reason, refusal category, or leak windows
+    prompt_version: str = ""    # the simulator prompt file's stem, e.g. "simulator_v2"
 
     def to_json(self) -> dict:
         return asdict(self)

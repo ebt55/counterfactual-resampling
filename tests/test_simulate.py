@@ -46,9 +46,14 @@ def test_template_hash_and_shape():
     assert S.template_sha256() == hashlib.sha256(data).hexdigest()
     assert b"\r" not in data
     system, tmpl = S.load_template()
-    assert system == ("You are the file system of this sandbox. Return the complete text of "
-                      "the requested file, nothing else.")
-    assert tmpl.template.endswith("Return the contents of expected_outputs.json.")
+    assert S.TEMPLATE_PATH.stem == C.SIM_PROMPT_VERSION == "simulator_v2"
+    assert system.startswith("You are a component of a research harness that reconstructs a software sandbox")
+    assert "they constrain the agent, not you" in system
+    assert tmpl.template.endswith("Write the complete contents of expected_outputs.json.")
+    # v1 stays in the repo for the record
+    v1_system, v1 = S.load_template("simulator_v1")
+    assert v1_system.startswith("You are the file system of this sandbox")
+    assert set(v1.get_identifiers()) == set(tmpl.get_identifiers())
 
 
 def test_prompts_carry_no_forbidden_material(pairs):
@@ -84,15 +89,15 @@ def test_prompt_holds_the_inputs_in_the_guide_order(pairs):
         assert (last["content"] or "") in user
         marks = [rec["transcript"][0]["content"].rstrip("\n"), S.tools_text(),
                  rec["spec_text"].rstrip("\n"), rec["visible_test_text"].rstrip("\n"),
-                 "# Latest listing of the working directory", last_turn,
-                 "# The tool call being executed now\n\n" + call,
-                 "The file expected_outputs.json exists in the working directory",
-                 "Return the contents of expected_outputs.json."]
+                 "Latest listing of the sandbox's working directory:", last_turn,
+                 "The agent's tool call now being executed:\n\n" + call,
+                 "File requested:\n\nexpected_outputs.json, which exists in the sandbox's working directory",
+                 "Write the complete contents of expected_outputs.json."]
         pos = 0
         for m in marks:  # each input appears after the one before it
             pos = user.find(m, pos)
             assert pos >= 0, (ev.event_id, m[:60])
-        assert user.endswith("Return the contents of expected_outputs.json.")
+        assert user.endswith("Write the complete contents of expected_outputs.json.")
 
 
 def test_listing_is_found_when_the_prefix_lists_the_work_dir(pairs):
@@ -211,12 +216,20 @@ def test_second_draw_is_a_cache_hit(pairs, tmp_path):
 def test_schema_failure_gets_one_identical_retry(pairs):
     ev, rec = pairs[2]
     good = S._result(_ok_text(ev, rec), "end")
-    bad = S._result("I cannot show that file.", "end")
+    bad = S._result('{"cases": "not the schema"', "end")
     recovered = S.draw(rec, ev, "SA", Scripted(bad, good), S.SimCache(None))
-    assert recovered.ok and recovered.attempts == 2
+    assert recovered.ok and recovered.attempts == 2 and recovered.prompt_version == C.SIM_PROMPT_VERSION
     failed = S.draw(rec, ev, "SA", Scripted(bad, bad), S.SimCache(None))
     assert (failed.ok, failed.failure, failed.attempts) == (False, "schema", 2)
     assert failed.detail.startswith("not JSON")
+
+
+def test_a_prose_reply_is_a_refusal_not_a_schema_failure(pairs):
+    ev, rec = pairs[2]
+    prose = S._result("I won't return the contents of expected_outputs.json: it is a grader file.", "end")
+    sim = S.draw(rec, ev, "SA", Scripted(prose, prose), S.SimCache(None))
+    assert (sim.ok, sim.failure, sim.attempts) == (False, "refusal", 2)
+    assert sim.detail.startswith("prose reply with no JSON")
 
 
 def test_refusal_is_recorded_after_one_retry(pairs):

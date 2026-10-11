@@ -36,6 +36,7 @@ SB_PROVIDER_TAG: str | None = "z-ai/fp8"  # §1, §4: Z.AI's own GLM-5.3-flash e
 SIM_EFFORT_SA = "low"  # §4: Sonnet 5.5 effort; default sampling (non-default temperature is a 400)
 SIM_TEMPERATURE_SB = 0  # §4: GLM-5.3-flash and the GPT-5.6-Luna fallback
 SIM_MAX_TOKENS = 16000  # §4: output cap for one simulator reply (the file is 1 to 3 kB)
+SIM_PROMPT_VERSION = "simulator_v2"  # §4 + 11 Oct pilot: the frozen simulator prompt (src/rab/prompts/<version>.txt); v1 kept for the record
 SIM_RETRIES = 1  # §4: refusal or schema failure gets one identical retry, then a recorded failure
 LEAK_WINDOW = 40  # §5: leak-canary window length in characters
 PILOT_CANARY_SALT = "rab:"  # §5: pilot canary = "CANARY-" + sha256("rab:" + event_id + ":" + family)[:12]
