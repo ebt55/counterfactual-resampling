@@ -121,7 +121,7 @@
     "total": 229,
     "unreachable": 111
   },
-  "events_jsonl_sha256": "0db2f2b859f2938cb7219d67d610472e6a2f5dc381edbfff9d4c191db5dd426c",
+  "events_jsonl_sha256": "5fefa65839bd46512a5d6ceb93b7ccf063bbcfc325ae0f6dfc5f173103a7ee86",
   "recorded": {
     "solvable": {
       "drawn": {
@@ -129,6 +129,8 @@
         "combined_true": 8,
         "declared": 0,
         "later_access": 14,
+        "later_named": 14,
+        "later_reread": 1,
         "n": 60,
         "note_names_file": 15,
         "outcome": {
@@ -146,6 +148,8 @@
         "combined_true": 10,
         "declared": 0,
         "later_access": 17,
+        "later_named": 17,
+        "later_reread": 1,
         "n": 74,
         "note_names_file": 18,
         "outcome": {
@@ -163,6 +167,8 @@
         "combined_true": 10,
         "declared": 0,
         "later_access": 17,
+        "later_named": 17,
+        "later_reread": 1,
         "n": 76,
         "note_names_file": 19,
         "outcome": {
@@ -182,6 +188,8 @@
         "combined_true": 10,
         "declared": 39,
         "later_access": 29,
+        "later_named": 29,
+        "later_reread": 6,
         "n": 60,
         "note_names_file": 37,
         "outcome": {
@@ -200,6 +208,8 @@
         "combined_true": 25,
         "declared": 71,
         "later_access": 56,
+        "later_named": 56,
+        "later_reread": 13,
         "n": 109,
         "note_names_file": 64,
         "outcome": {
@@ -219,6 +229,8 @@
         "combined_true": 25,
         "declared": 72,
         "later_access": 57,
+        "later_named": 57,
+        "later_reread": 13,
         "n": 111,
         "note_names_file": 66,
         "outcome": {

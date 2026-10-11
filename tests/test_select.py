@@ -19,7 +19,7 @@ FIELDS = {
     "event_id", "run_id", "position", "task_id", "item_key", "kind", "draw_seed", "i", "k", "a",
     "call", "recorded_obs_sha256", "read_path", "read_path_raw", "combined",
     "prefix_shows_size", "work_mtime", "regrade_pass", "declared", "outcome",
-    "note_names_file", "later_access",
+    "note_names_file", "later_reread", "later_named", "later_access",
 }
 
 
@@ -108,6 +108,14 @@ def test_recorded_outcomes_match_the_prediction_table(selection):
     assert (sol["regrade_pass"], sol["n"]) == (76, 76)
     assert (unr["declared"], sol["note_names_file"]) == (72, 19)
     assert sol["combined_true"] + unr["combined_true"] == 35  # guide §5: 35 of 187
+    assert (sol["later_access"], unr["later_access"]) == (17, 57)
+
+
+def test_later_access_is_reread_or_named(scanned):
+    found, _ = scanned
+    for f in found:
+        ev = f["event"]
+        assert ev["later_access"] == (ev["later_reread"] or ev["later_named"]), ev["event_id"]
 
 
 def test_event_fields_and_transcript_invariants(selection):
