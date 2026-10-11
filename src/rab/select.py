@@ -30,10 +30,16 @@ Filter, in the guide's order
    ``json.dumps(transcript[:k])`` contains neither ``__unreachable`` nor
    ``__contradict`` (label leak), and no ``tool_calls[:i]`` output contains the
    ``hidden_tests.py`` canary.
+6. Build plan decision 17(c), a departure from the guide: when
+   ``data/replay_sweep.json`` exists (``python -m rab.prefix --sweep``, one fresh env-v2
+   replay of every event left after step 4), events whose prefix did not replay
+   (``ok`` false: some call not ``content_equal`` to its recording, or the ``/work``
+   touch failed) are dropped as ``replay``. The recount lists them per kind and records
+   the sweep file's sha256.
 
 Draw: for each kind separately, ``random.Random(SEED).sample(sorted(eligible_ids),
 N_PER_KIND)`` with a fresh ``Random`` per kind, where ``eligible_ids`` are the
-``event_id`` strings of that kind left after steps 3 and 4, sorted with Python's
+``event_id`` strings of that kind left after steps 3, 4 and 6, sorted with Python's
 default ``str`` ordering. ``data/events.jsonl`` holds the 120 drawn events: the
 solvable ones first, then the unreachable ones, each kind in sample order.
 
@@ -162,6 +168,8 @@ HIDDEN_TESTS_PATH = GRADER_ANSWER_PATH.replace(ANSWER_FILE, HIDDEN_TESTS)
 DATA_DIR = REPO_ROOT / "data"
 EVENTS_PATH = DATA_DIR / "events.jsonl"
 RECOUNT_PATH = DATA_DIR / "events_recount.json"
+#: chunk B's replay sweep (build plan decision 17c); read when present
+SWEEP_PATH = DATA_DIR / "replay_sweep.json"
 
 #: One ``ls -l`` line: mode, links, owner, group, size, date (``Mon DD HH:MM`` or
 #: ``Mon DD  YYYY``), name.
@@ -439,6 +447,30 @@ def scan(records: Iterable[dict]) -> tuple[list[dict], dict]:
     return found, dict(stats)
 
 
+def apply_replay_sweep(found: list[dict], sweep_path: Path | None = SWEEP_PATH) -> dict | None:
+    """Decision 17(c): drop as ``replay`` every eligible event whose prefix did not replay.
+
+    ``data/replay_sweep.json`` (``python -m rab.prefix --sweep``) maps every eligible
+    event id to ``{"ok": ...}``; an eligible event missing from it, or listed under
+    another kind, is an error. Returns the sweep's provenance, or None without a file.
+    """
+    if sweep_path is None or not Path(sweep_path).is_file():
+        return None
+    raw = Path(sweep_path).read_bytes()
+    entries = json.loads(raw)["events"]
+    live = [f for f in found if f["drop"] is None]
+    missing = [f["event"]["event_id"] for f in live if f["event"]["event_id"] not in entries]
+    _check(not missing, f"{sweep_path.name} lacks eligible events {missing[:5]} ({len(missing)})")
+    for f in live:
+        entry = entries[f["event"]["event_id"]]
+        _check(entry.get("kind") == f["event"]["kind"], f"{f['event']['event_id']}: sweep kind differs")
+        if not entry["ok"]:
+            f["drop"] = "replay"
+    doc = json.loads(raw)
+    return {"file": Path(sweep_path).name, "sha256": hashlib.sha256(raw).hexdigest(),
+            "image": doc.get("image"), "rule": doc.get("rule"), "generated": doc.get("generated")}
+
+
 def eligible_ids(found: list[dict], kind: str) -> list[str]:
     """Sorted event ids of ``kind`` left after the contradict and same-turn drops."""
     return sorted(f["event"]["event_id"] for f in found
@@ -489,8 +521,10 @@ def records_sha256() -> str:
     return hashlib.sha256(lines.encode("utf-8")).hexdigest()
 
 
-def build_recount(found: list[dict], stats: dict, drawn: list[dict]) -> dict:
+def build_recount(found: list[dict], stats: dict, drawn: list[dict], sweep: dict | None = None) -> dict:
     events = [f["event"] for f in found]
+    replay_drops = {kind: sorted(f["event"]["event_id"] for f in found
+                                 if f["drop"] == "replay" and f["event"]["kind"] == kind) for kind in KINDS}
     found_kinds = Counter(e["kind"] for e in events)
     drawn_ids = {e["event_id"] for e in drawn}
     same_turn = [f for f in found if f["drop"] == "same_turn"]
@@ -525,7 +559,12 @@ def build_recount(found: list[dict], stats: dict, drawn: list[dict]) -> dict:
         "dropped": {
             "contradict": found_kinds[DROPPED_KIND],
             "same_turn": {kind: sum(1 for f in same_turn if f["event"]["kind"] == kind) for kind in KINDS},
+            "replay": {kind: len(ids) for kind, ids in replay_drops.items()},
         },
+        "replay_drops": replay_drops,
+        "replay_sweep": sweep,
+        "eligible_before_replay": {kind: len(eligible_ids(found, kind)) + len(replay_drops[kind])
+                                   for kind in KINDS},
         "same_turn_drops": [
             {"event_id": f["event"]["event_id"], "kind": f["event"]["kind"], "i": f["event"]["i"],
              "k": f["event"]["k"], "a": f["event"]["a"],
@@ -550,11 +589,13 @@ def build_recount(found: list[dict], stats: dict, drawn: list[dict]) -> dict:
     }
 
 
-def select(records: Iterable[dict] | None = None) -> tuple[list[dict], dict]:
-    """Run §2 end to end: ``(drawn events, recount)``."""
+def select(records: Iterable[dict] | None = None,
+           sweep_path: Path | None = SWEEP_PATH) -> tuple[list[dict], dict]:
+    """Run §2 end to end, with the decision-17(c) replay filter: ``(drawn events, recount)``."""
     found, stats = scan(km.iter_line_records() if records is None else records)
+    sweep = apply_replay_sweep(found, sweep_path)
     drawn = draw(found)
-    return drawn, build_recount(found, stats, drawn)
+    return drawn, build_recount(found, stats, drawn, sweep)
 
 
 def main(argv: list[str] | None = None) -> int:

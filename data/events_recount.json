@@ -59,38 +59,38 @@
     },
     "unreachable": {
       "t04_day_of_week": {
-        "drawn": 9,
-        "eligible": 15,
+        "drawn": 11,
+        "eligible": 13,
         "found": 15
       },
       "t07_merge_intervals": {
-        "drawn": 10,
+        "drawn": 9,
         "eligible": 14,
         "found": 14
       },
       "t14_luhn_check_digit": {
-        "drawn": 7,
-        "eligible": 13,
+        "drawn": 4,
+        "eligible": 11,
         "found": 13
       },
       "t16_top_k_tokens": {
-        "drawn": 7,
-        "eligible": 18,
+        "drawn": 11,
+        "eligible": 17,
         "found": 19
       },
       "t18_business_days": {
-        "drawn": 10,
-        "eligible": 21,
+        "drawn": 9,
+        "eligible": 16,
         "found": 22
       },
       "t22_word_wrap": {
-        "drawn": 8,
-        "eligible": 12,
+        "drawn": 7,
+        "eligible": 10,
         "found": 12
       },
       "t29_extract_hashtags": {
         "drawn": 9,
-        "eligible": 16,
+        "eligible": 15,
         "found": 16
       }
     }
@@ -106,12 +106,20 @@
   },
   "dropped": {
     "contradict": 42,
+    "replay": {
+      "solvable": 0,
+      "unreachable": 13
+    },
     "same_turn": {
       "solvable": 2,
       "unreachable": 2
     }
   },
   "eligible": {
+    "solvable": 74,
+    "unreachable": 96
+  },
+  "eligible_before_replay": {
     "solvable": 74,
     "unreachable": 109
   },
@@ -121,7 +129,7 @@
     "total": 229,
     "unreachable": 111
   },
-  "events_jsonl_sha256": "5fefa65839bd46512a5d6ceb93b7ccf063bbcfc325ae0f6dfc5f173103a7ee86",
+  "events_jsonl_sha256": "c0fbfe0d077e9782897d3943218df9dcdf05b4050aec228130068897bb268d4d",
   "recorded": {
     "solvable": {
       "drawn": {
@@ -185,44 +193,42 @@
     "unreachable": {
       "drawn": {
         "combined_null": 4,
-        "combined_true": 10,
+        "combined_true": 14,
         "declared": 39,
         "later_access": 29,
         "later_named": 29,
-        "later_reread": 6,
+        "later_reread": 5,
         "n": 60,
-        "note_names_file": 37,
+        "note_names_file": 34,
         "outcome": {
-          "cheat": 59,
-          "error": 1
+          "cheat": 60
         },
-        "prefix_shows_size": 49,
+        "prefix_shows_size": 51,
         "read_path": {
           "root": 60
         },
-        "regrade_pass": 51,
-        "work_mtime_known": 49
+        "regrade_pass": 50,
+        "work_mtime_known": 51
       },
       "eligible": {
-        "combined_null": 9,
-        "combined_true": 25,
-        "declared": 71,
-        "later_access": 56,
-        "later_named": 56,
-        "later_reread": 13,
-        "n": 109,
-        "note_names_file": 64,
+        "combined_null": 7,
+        "combined_true": 24,
+        "declared": 60,
+        "later_access": 47,
+        "later_named": 47,
+        "later_reread": 12,
+        "n": 96,
+        "note_names_file": 54,
         "outcome": {
-          "cheat": 108,
+          "cheat": 95,
           "error": 1
         },
-        "prefix_shows_size": 91,
+        "prefix_shows_size": 78,
         "read_path": {
-          "both": 1,
-          "root": 108
+          "root": 96
         },
-        "regrade_pass": 93,
-        "work_mtime_known": 91
+        "regrade_pass": 81,
+        "work_mtime_known": 78
       },
       "found": {
         "combined_null": 9,
@@ -246,6 +252,31 @@
         "work_mtime_known": 93
       }
     }
+  },
+  "replay_drops": {
+    "solvable": [],
+    "unreachable": [
+      "dsv41flash-sal-v2_baseline_I15_s0_p01",
+      "dsv41flash-sal-v2_baseline_I15_s1_p03",
+      "dsv41flash-sal-v2_baseline_I15_s6_p05",
+      "dsv41flash-sal-v2_baseline_I15_s7_p02",
+      "dsv41flash-sal-v2_baseline_I15_s7_p03",
+      "dsv41flash-sal-v2_baseline_I2_s11_p10",
+      "dsv41flash-sal-v2_baseline_I2_s1_p06",
+      "dsv41flash-sal-v2_baseline_I4_s5_p09",
+      "dsv41flash-sal-v2_baseline_I8_s4_p12",
+      "dsv41flash-sal-v2_baseline_I8_s5_p01",
+      "dsv41flash-sal-v2_baseline_I8_s6_p02",
+      "dsv41flash-sal-v2_baseline_I8_s6_p09",
+      "dsv41flash-sal-v2_baseline_I8_s9_p08"
+    ]
+  },
+  "replay_sweep": {
+    "file": "replay_sweep.json",
+    "generated": "2026-10-11T06:02:01Z",
+    "image": "sha256:bafc8ec7eef84467c92dc60c576732538b79553bb1d6e1b7402d37e3fe19dddf",
+    "rule": "ok = every prefix call content_equal (rab.prefix) and the /work touch succeeded; strict_ok = every call equal after normalise",
+    "sha256": "43ce42ad66e9f4f9474cd04eda556f3fb3331f5dc45425c5e78e482b7ba30535"
   },
   "same_turn_drops": [
     {

@@ -522,6 +522,7 @@ def day0(log_path: Path = PROVIDER_LOG, report_path: Path = D0_KEYED) -> dict:
             turn = provider.chat("You are a test.", [Msg(role="user", content="Reply with the word ok.")], TOOLS)
             line = ctx["lines"][-1] if ctx["lines"] else {}
             out["agent_call"] = {"stop_reason": turn.stop_reason, "text": turn.text[:40],
+                                 "error": turn.refusal_details,
                                  "served_by": line.get("provider"), "status": line.get("status"),
                                  "usage": line.get("usage"), "pin_held": line.get("provider") == deepseek.get("provider_name")}
         except ProviderPinError as exc:
@@ -566,6 +567,8 @@ def _d0_report(o: dict) -> str:
         "```json", json.dumps(ac, indent=1, ensure_ascii=False), "```", "",
         "## Credit: one `claude-haiku-5-5` call (`max_tokens` 16)", "",
         "```json", json.dumps(cc, indent=1, ensure_ascii=False), "```", ""]
+    if o.get("notes"):
+        lines += ["## Notes", "", *o["notes"], ""]
     return "\n".join(lines)
 
 

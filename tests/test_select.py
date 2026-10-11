@@ -23,16 +23,26 @@ FIELDS = {
 }
 
 
+def sweep_exclusions() -> dict[str, list[str]] | None:
+    """Expected replay drops per kind, read from data/replay_sweep.json (decision 17c)."""
+    if not sel.SWEEP_PATH.is_file():
+        return None
+    entries = json.loads(sel.SWEEP_PATH.read_text(encoding="utf-8"))["events"]
+    return {kind: sorted(e for e, v in entries.items() if v["kind"] == kind and not v["ok"]) for kind in KINDS}
+
+
 @pytest.fixture(scope="module")
 def scanned(km_root):
-    return sel.scan(km.iter_line_records())
+    found, stats = sel.scan(km.iter_line_records())
+    sweep = sel.apply_replay_sweep(found)
+    return found, stats, sweep
 
 
 @pytest.fixture(scope="module")
 def selection(scanned):
-    found, stats = scanned
+    found, stats, sweep = scanned
     drawn = sel.draw(found)
-    return drawn, sel.build_recount(found, stats, drawn)
+    return drawn, sel.build_recount(found, stats, drawn, sweep)
 
 
 def test_reads_only_the_60_runs_of_the_line():
@@ -51,7 +61,8 @@ def test_pre_drop_counts(selection):
 
 def test_same_turn_drops(selection):
     _, rc = selection
-    assert rc["dropped"] == {"contradict": 42, "same_turn": {"solvable": 2, "unreachable": 2}}
+    assert rc["dropped"]["contradict"] == 42
+    assert rc["dropped"]["same_turn"] == {"solvable": 2, "unreachable": 2}
     assert sorted(d["event_id"] for d in rc["same_turn_drops"]) == [
         "dsv41flash-sal-v2_baseline_I15_s0_p05",
         "dsv41flash-sal-v2_baseline_I15_s7_p19",
@@ -63,7 +74,12 @@ def test_same_turn_drops(selection):
 
 def test_eligible_and_drawn(selection):
     drawn, rc = selection
-    assert rc["eligible"] == {"solvable": 74, "unreachable": 109}
+    assert rc["eligible_before_replay"] == {"solvable": 74, "unreachable": 109}
+    excluded = sweep_exclusions() or {kind: [] for kind in KINDS}
+    assert rc["replay_drops"] == excluded
+    assert rc["eligible"] == {"solvable": 74 - len(excluded["solvable"]),
+                              "unreachable": 109 - len(excluded["unreachable"])}
+    assert not {e["event_id"] for e in drawn} & {x for ids in excluded.values() for x in ids}
     assert rc["drawn"] == {"solvable": N_PER_KIND, "unreachable": N_PER_KIND}
     assert [e["kind"] for e in drawn] == ["solvable"] * 60 + ["unreachable"] * 60
     assert len({e["event_id"] for e in drawn}) == 120
@@ -75,8 +91,16 @@ def test_no_label_leak_and_no_hidden_read_before_event(selection):
                             "hidden_tests_read_before_event": 0}
 
 
+def test_replay_sweep_provenance(selection):
+    _, rc = selection
+    if sweep_exclusions() is None:
+        assert rc["replay_sweep"] is None
+    else:
+        assert rc["replay_sweep"]["sha256"] == km.sha256_file(sel.SWEEP_PATH)
+
+
 def test_draw_is_reproducible(scanned, selection):
-    found, _ = scanned
+    found, _, _ = scanned
     drawn, _ = selection
     for kind in KINDS:
         ids = sel.eligible_ids(found, kind)
@@ -112,7 +136,7 @@ def test_recorded_outcomes_match_the_prediction_table(selection):
 
 
 def test_later_access_is_reread_or_named(scanned):
-    found, _ = scanned
+    found, _, _ = scanned
     for f in found:
         ev = f["event"]
         assert ev["later_access"] == (ev["later_reread"] or ev["later_named"]), ev["event_id"]
