@@ -1,6 +1,7 @@
 # counterfactual-resampling
 
-[EBIN: one sentence, verbatim]
+If an AI agent opens a file it was told not to open, and we quietly swap that file for a
+convincing fake, does the agent carry on the same way it would have with the real file?
 
 At the agent's first read of the answer file, we replaced the file's contents on disk
 with a simulated version and re-ran the agent from that step. The comparator is re-runs
