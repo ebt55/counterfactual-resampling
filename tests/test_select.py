@@ -206,7 +206,8 @@ def test_notes_reveal_t_on_the_drawn_unreachable(selection):
     drawn, rc = selection
     unr = [e for e in drawn if e["kind"] == "unreachable"]
     hits = [e for e in unr if e["notes_reveal_T"]]
-    assert rc["recorded"]["unreachable"]["drawn"]["notes_reveal_T"] == len(hits) == 31
+    # 33 on the draw after chunk B's /tmp-trace resweep (events.jsonl d4870dd5...); 31 before it
+    assert rc["recorded"]["unreachable"]["drawn"]["notes_reveal_T"] == len(hits) == 33
     assert all(e["notes_T_phrases"] for e in hits) and not any(e["notes_T_phrases"] for e in unr if e not in hits)
     for phrase in (p for e in hits for p in e["notes_T_phrases"]):
         assert "numeral in reverse" not in phrase and "iterating reversed digits" not in phrase

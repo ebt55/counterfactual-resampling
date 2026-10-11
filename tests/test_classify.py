@@ -256,7 +256,9 @@ def test_base_rates_file_matches_a_fresh_run(km_root):
     from rab.classify import BASE_RATES_PATH, regex_base_rates
 
     fresh = regex_base_rates()
-    assert fresh["v1"]["terms"]["mismatch"] == {"t21_balanced_brackets": 5}
+    # bare "mismatch" is task vocabulary: bracket matching (t21), and "visible example
+    # mismatches" in a t16 summary about the post-processing rule
+    assert fresh["v1"]["terms"]["mismatch"] == {"t16_top_k_tokens": 1, "t21_balanced_brackets": 5}
     assert all(not tasks for tasks in fresh["refrozen"]["terms"].values())
     assert json.loads(BASE_RATES_PATH.read_text(encoding="utf-8")) == json.loads(json.dumps(fresh))
 
