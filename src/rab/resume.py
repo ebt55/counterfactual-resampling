@@ -48,7 +48,13 @@ the blocked call's tool entry in it), ``snapshot_before`` the placement snapshot
 the pilot canary and the fake's values for S), ``reasoning_log`` (by call number,
 verbatim, never resent), ``provider_log`` (this run's lines), ``wall_s``, ``cost_usd``,
 ``error_class`` (:func:`classify_error`), ``rerun``, ``file_view`` (the parsed file on
-disk after placement) and ``monitor_denials`` (B only).
+disk after placement), ``monitor_denials`` (B only), ``n_length_cutoffs`` (continuation
+calls KM mapped to ``max_tokens``: OpenRouter ``finish_reason == "length"``; reasoning
+tokens count against the cap), ``agent_max_tokens`` (KM's pinned cap, recorded),
+``cont_nudges``, and ``root_file_sha256_before`` / ``root_file_sha256_after`` (sha256 of
+the work-dir root ``expected_outputs.json`` read through ``sandbox.read_file`` after
+placement and at the end; KM's snapshot does not cover it; ``"missing"`` when the file
+is gone, None when the read failed).
 
 Provider (decision 4). :func:`make_agent_provider` is KM's ``make("openrouter", ...)``
 with KM's agent defaults (``max_tokens`` 4096, no temperature, no reasoning effort)
@@ -64,8 +70,9 @@ Cost (§6, decision 13). :class:`CostMeter` prices usage with KM's ``analysis.sp
 overrides the table when set). :func:`preflight` runs once, after the first 20 agent
 calls: it projects the whole run as mean cost per call x calls per continuation (the
 recorded ``n_turns`` minus the prefix turns, averaged over the drawn events) x 2,160,
-prints it, and raises :class:`PreflightAbort` when every one of the 20 calls read zero
-cached tokens or the projection exceeds $15. ``enabled=False`` in ``--dry-run``.
+prints it, and raises :class:`PreflightAbort` only when the projection exceeds $15.
+Zero cached tokens on all 20 calls, or all 20 failing, are printed as warnings (since
+pilot 2). ``enabled=False`` in ``--dry-run``.
 
 Dry run: :func:`dry_run_provider` gives KM's ``FakeProvider`` one of two scripts per
 item (guide §10), by event index parity: read ``expected_outputs.json`` again then
@@ -319,20 +326,21 @@ def preflight(meter: CostMeter, first_n: int = C.PREFLIGHT_FIRST_N, enabled: boo
     projected = per_call * calls * slots
     failed = sum(not c.get("ok", True) for c in head)
     zero_cache = all(c["cache_read_input_tokens"] == 0 for c in head)
-    reasons = []
+    reasons, warnings = [], []
     if failed == first_n:
         # every call errored, so the cache check says nothing: name the real cause
-        reasons.append(f"all of the first {first_n} agent calls failed (API errors; see results/provider.log)")
+        warnings.append(f"all of the first {first_n} agent calls failed (API errors; see results/provider.log)")
     elif zero_cache:
-        reasons.append(f"cache_read_input_tokens is 0 on all of the first {first_n} calls")
+        warnings.append(f"cache_read_input_tokens is 0 on all of the first {first_n} calls")
     if projected > C.CASH_CEILING_USD:
         reasons.append(f"projected ${projected:.2f} exceeds the ${C.CASH_CEILING_USD:.0f} ceiling")
     verdict = {"first_n": first_n, "failed_calls": failed, "mean_call_usd": per_call, "calls_per_continuation": calls,
                "slots": slots, "projected_usd": projected, "zero_cache": zero_cache,
-               "abort": bool(reasons) and enabled, "reasons": reasons, "enabled": enabled}
+               "abort": bool(reasons) and enabled, "reasons": reasons, "warnings": warnings, "enabled": enabled}
     meter.preflight_result = verdict
     print(f"[preflight] ${per_call:.5f}/call x {calls:.2f} calls x {slots} continuations = "
           f"${projected:.2f} projected; {'; '.join(reasons) or 'ok'}"
+          f"{''.join('; warning: ' + w for w in warnings)}"
           f"{'' if enabled else ' (disabled: dry run)'}", file=sys.stderr, flush=True)
     if verdict["abort"]:
         raise PreflightAbort("; ".join(reasons))
@@ -344,6 +352,19 @@ def preflight(meter: CostMeter, first_n: int = C.PREFLIGHT_FIRST_N, enabled: boo
 #: Design v2 C: only infrastructure failures are re-run (once); turn-limit and
 #: wall-clock endings are behaviour and never re-run.
 RERUN_CLASSES = ("api_error", "docker_error", "grade_failed", "exception")
+
+
+def root_file_sha256(sandbox, item_key: str) -> str | None:
+    """sha256 of the work-dir root ``expected_outputs.json`` ("missing" when it is gone,
+    None when the read fails for another reason). A harness read, not an agent call."""
+    import hashlib
+
+    try:
+        return hashlib.sha256(sandbox.read_file(item_key, C.ANSWER_FILE).encode("utf-8")).hexdigest()
+    except FileNotFoundError:
+        return "missing"
+    except Exception as exc:  # KM's container read reports the traceback in SandboxError
+        return "missing" if "FileNotFoundError" in str(exc) or "No such file" in str(exc) else None
 
 
 def classify_error(cont: dict) -> str | None:
@@ -424,13 +445,14 @@ def resume(replay, placed: Placed, event: Event | dict, rec: dict, provider, run
         replay.close()
         raise
 
+    root_before = root_file_sha256(sandbox, item_key)
     mc = rec["model_config"]
     if executor is None:
         executor = ToolExecutor(sandbox, item_key, int(mc["bash_timeout_s"]), int(mc["tool_output_limit"]))
     tool_log: list[dict] = []
     usage = {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0}
     stop_reason, refusal_details, final_text, error = "end_turn", None, "", None
-    cont_turns, nudges = 0, 0
+    cont_turns, nudges, length_cutoffs = 0, 0, 0
     monitored, denials = arm == "B", 0
     prefix_turns, prefix_nudges = budget["prefix_turns"], budget["prefix_nudges"]
     cost = 0.0
@@ -448,6 +470,8 @@ def resume(replay, placed: Placed, event: Event | dict, rec: dict, provider, run
 
             turn = provider.chat(system, messages, TOOLS)
             cont_turns += 1
+            if turn.stop_reason == "max_tokens":  # KM maps finish_reason "length" here
+                length_cutoffs += 1
             merge_usage(usage, turn.usage)
             if meter is not None:
                 cost += meter.add(rec_out["provider"] or "", rec_out["model"] or "", turn.usage or {},
@@ -524,6 +548,8 @@ def resume(replay, placed: Placed, event: Event | dict, rec: dict, provider, run
         "provider_stop_reason": stop_reason, "refusal_details": refusal_details, "error": error,
     })
     try:
+        rec_out["root_file_sha256_before"] = root_before
+        rec_out["root_file_sha256_after"] = root_file_sha256(sandbox, item_key)
         try:
             snap = sandbox.snapshot(item_key)
             rec_out["snapshot_after"] = snap.get("hashes", {})
@@ -559,6 +585,8 @@ def resume(replay, placed: Placed, event: Event | dict, rec: dict, provider, run
         "wall_s": rec_out["duration_s"], "cost_usd": round(cost, 6), "error_class": error_class,
         "rerun": error_class in RERUN_CLASSES, "file_view": placed.file_obj,
         "monitor_denials": denials if monitored else None, "dry_run": dry_run,
+        "n_length_cutoffs": length_cutoffs, "agent_max_tokens": getattr(provider, "max_tokens", None),
+        "cont_nudges": nudges,
     })
     rec_out["post_block_leak"] = post_block_leak(rec_out, placed, rec, replay.task_dir, k)
     if rec_out["post_block_leak"]["severity"] == "drop":

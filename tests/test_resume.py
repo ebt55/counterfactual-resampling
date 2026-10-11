@@ -175,7 +175,18 @@ def test_resume_end_to_end(km_root, tmp_path, arm, script_index):
     placed = P.place(rep.sandbox, rep.item_key, rep.task_dir, rec, ev, arm, fake_text)
     if arm == "R":
         assert placed.obs_matches_recording is True
-    cont = resume(rep, placed, ev, rec, dry_run_provider(ev, script_index), 0, budget=budget,
+    provider = dry_run_provider(ev, script_index)
+    if script_index == 1:  # the first continuation call reports a length cut-off (KM maps it to max_tokens)
+        inner = provider.chat
+
+        def chat(*a, **kw):
+            turn = inner(*a, **kw)
+            if not getattr(chat, "done", False):
+                chat.done = True
+                turn.stop_reason = "max_tokens"
+            return turn
+        provider.chat = chat
+    cont = resume(rep, placed, ev, rec, provider, 0, budget=budget,
                   dry_run=True, refusals_path=tmp_path / "refusals.jsonl")
     assert not _container_exists(name)                       # the replay container is gone
     assert cont["submitted"] and cont["provider_stop_reason"] == "end_turn"
@@ -191,6 +202,10 @@ def test_resume_end_to_end(km_root, tmp_path, arm, script_index):
     # audit items 1 and 2: the solution ran in the arm's own sandbox; no leak in the outputs
     assert cont["solution_cases"]["where"] == "sandbox" and not r["solution_kind_host"]
     assert cont["post_block_leak"]["severity"] is None
+    # pilot-2 review items 6 and 8: length cut-offs counted; the root answer file hashed before and after
+    assert cont["n_length_cutoffs"] == script_index
+    assert len(cont["root_file_sha256_before"]) == 64
+    assert cont["root_file_sha256_after"] == cont["root_file_sha256_before"] and r["root_file_modified"] is False
 
 
 # ------------------------------------------------------------------ design v2: re-runs, slots, the B monitor
@@ -324,3 +339,34 @@ def test_event_drop_carries_the_continuation():
 
     err = EventDrop("leak", "detail", {"event_id": "e"})
     assert (err.reason, err.detail, err.payload) == ("leak", "detail", {"event_id": "e"})
+
+
+def test_root_file_sha256_reads_through_the_sandbox():
+    import hashlib
+
+    from rab.resume import root_file_sha256
+
+    class Box:
+        def __init__(self, files):
+            self.files = files
+
+        def read_file(self, item_key, path):
+            if path not in self.files:
+                raise FileNotFoundError(path)
+            return self.files[path]
+
+    class DockerBox(Box):
+        def read_file(self, item_key, path):
+            if path not in self.files:
+                raise RuntimeError("Traceback ... FileNotFoundError: [Errno 2] No such file or directory")
+            return self.files[path]
+
+    class Broken(Box):
+        def read_file(self, item_key, path):
+            raise RuntimeError("container gone")
+
+    text = '{"_canary": "x"}'
+    assert root_file_sha256(Box({"expected_outputs.json": text}), "k") == hashlib.sha256(text.encode()).hexdigest()
+    assert root_file_sha256(Box({}), "k") == "missing"
+    assert root_file_sha256(DockerBox({}), "k") == "missing"
+    assert root_file_sha256(Broken({}), "k") is None

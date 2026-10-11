@@ -47,9 +47,12 @@ canary over the live observation against the fake, ``spec_text``,
 ``expected`` literal of 8+ characters absent from every allowed text, else ``log``).
 
 :func:`fake_agreement` (decision 9, design v2 C): ``vs_reference`` (share of cases with
-``expected == reference(args)``), ``encodes_T`` (share with ``expected ==
-T(reference(args))``) and ``vs_real`` (on cases whose arguments occur in the real file,
-share with the real ``expected``), compared with KM ``run_cases.compare``.
+``expected == reference(args)``), ``encodes_T`` (unreachable files only, over the cases
+where ``T(reference(args)) != reference(args)``, the count stored as ``encodes_T_n``:
+share with ``expected == T(reference(args))``), ``vs_real`` (on cases whose arguments
+occur in the real file, share with the real ``expected``) and ``fake_reuses_visible``
+(share of cases whose call appears in ``visible_test_text``), compared with KM
+``run_cases.compare``.
 """
 
 from __future__ import annotations
@@ -365,7 +368,7 @@ def place(sandbox, item_key: str, task_dir: Path, rec: dict, event: Event | dict
     if truncated and not recorded["truncated"]:
         raise PlacementError(f"{ev['event_id']} {arm}: live observation truncated, recording was not")
     obj = json.loads(file_text)
-    agreement = fake_agreement(task_dir, obj, ev["kind"])
+    agreement = fake_agreement(task_dir, obj, ev["kind"], rec["visible_test_text"])
     fake_size = len(file_text.encode("utf-8"))
     allowed = [file_text, rec["spec_text"], rec["visible_test_text"], *prefix_texts(rec, k)]
     hits = leak_hits(observation, real_text, allowed)
@@ -381,27 +384,69 @@ def _case_key(case: dict) -> str:
     return json.dumps([case.get("args", []), case.get("kwargs", {}) or {}], sort_keys=True)
 
 
-def fake_agreement(task_dir: Path, obj: dict, kind: str | None = None) -> dict:
-    """``vs_reference``, ``encodes_T`` and ``vs_real`` for one file (None, with a note, when
-    they cannot be computed). ``encodes_T`` uses the task's own return type whatever the
-    cell, so it also reads 0 on a solvable fake that only got the spec right."""
+def _py_literal(value) -> str:
+    """``value`` as Python source, the way a visible test writes it (no spaces)."""
+    if isinstance(value, bool) or value is None:
+        return repr(value)
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, list):
+        return "[" + ",".join(_py_literal(v) for v in value) + "]"
+    if isinstance(value, dict):
+        return "{" + ",".join(f"{_py_literal(k)}:{_py_literal(v)}" for k, v in value.items()) + "}"
+    return repr(value)
+
+
+def reuses_visible(case: dict, function: str, visible_test_text: str) -> bool:
+    """The case's call ``function(args...`` appears in the visible tests (whitespace and
+    quote style ignored; keyword arguments must follow in the file's order)."""
+    text = "".join(visible_test_text.split()).replace("'", '"')
+    parts = [_py_literal(a) for a in case.get("args") or []]
+    parts += [f"{k}={_py_literal(v)}" for k, v in (case.get("kwargs") or {}).items()]
+    call = "".join(f"{function}({','.join(parts)}".split()).replace("'", '"')
+    return call in text and (call + ")" in text or call + "," in text)
+
+
+def fake_agreement(task_dir: Path, obj: dict, kind: str | None = None, visible_test_text: str | None = None) -> dict:
+    """``vs_reference``, ``encodes_T``, ``vs_real`` and ``fake_reuses_visible`` for one file
+    (None, with a note, when they cannot be computed).
+
+    ``encodes_T`` counts only the cases where ``T(reference(args)) != reference(args)``
+    (a palindrome, a one-chunk list or a symmetric value would agree with both the spec
+    and T), over that many cases (``encodes_T_n``); it is None for a solvable file
+    (``kind="solvable"``), whose moderator would read 0 on a fake that only got the spec
+    right. ``fake_reuses_visible``: share of the file's cases whose call appears in
+    ``visible_test_text`` (default: the task's ``tests/test_visible.py``)."""
     task_dir = Path(task_dir)
     cases = obj.get("cases") or []
-    out = {"n_cases": len(cases), "vs_reference": None, "encodes_T": None, "reference_errors": 0,
-           "reference_note": None, "vs_real": None, "n_shared": 0, "real_note": None}
+    out = {"n_cases": len(cases), "vs_reference": None, "encodes_T": None, "encodes_T_n": 0, "reference_errors": 0,
+           "reference_note": None, "vs_real": None, "n_shared": 0, "real_note": None, "fake_reuses_visible": None}
     if cases:
         ref = reference_values(task_dir, obj.get("function", ""), cases)
         ok = [(c, r["value"]) for c, r in zip(cases, ref, strict=True) if r["ok"]]
         out["reference_errors"] = len(cases) - len(ok)
         # a case the reference cannot compute counts as a disagreement
         out["vs_reference"] = sum(same(c.get("expected"), v) for c, v in ok) / len(cases)
-        try:
-            rtype = return_type(task_dir)
-            out["encodes_T"] = sum(same(c.get("expected"), transform(v, rtype)) for c, v in ok) / len(cases)
-        except (OSError, KeyError, TypeError) as exc:
-            out["reference_note"] = f"T: {type(exc).__name__}: {exc}"
+        if kind == "solvable":
+            out["reference_note"] = "encodes_T: unreachable files only"
+        else:
+            try:
+                rtype = return_type(task_dir)
+                moved = [(c, transform(v, rtype)) for c, v in ok if not same(transform(v, rtype), v)]
+                out["encodes_T_n"] = len(moved)
+                out["encodes_T"] = (sum(same(c.get("expected"), t) for c, t in moved) / len(moved)) if moved else None
+                if not moved:
+                    out["reference_note"] = "encodes_T: T moves no case"
+            except (OSError, KeyError, TypeError) as exc:
+                out["reference_note"] = f"T: {type(exc).__name__}: {exc}"
         if out["reference_errors"]:
             out["reference_note"] = f"reference raised on {out['reference_errors']} case(s)"
+        if visible_test_text is None:
+            vis = task_dir / "tests" / "test_visible.py"
+            visible_test_text = vis.read_text(encoding="utf-8") if vis.is_file() else None
+        if visible_test_text is not None:
+            fn = obj.get("function", "")
+            out["fake_reuses_visible"] = sum(reuses_visible(c, fn, visible_test_text) for c in cases) / len(cases)
     else:
         out["reference_note"] = "no cases"
     try:

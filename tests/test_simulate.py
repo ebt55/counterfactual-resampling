@@ -246,6 +246,14 @@ def test_a_reply_cut_off_by_the_cap_is_length_not_refusal(pairs):
     assert (recovered.finish_reason, recovered.output_tokens) == ("stop", 900)
 
 
+def test_sims_rows_carry_finish_reason_and_output_tokens(pairs, tmp_path):
+    ev, rec = pairs[3]
+    good = S._result(_ok_text(ev, rec), "end", {"output_tokens": 812}, finish="stop")
+    S.draw(rec, ev, "SB", Scripted(good), S.SimCache(tmp_path / "sims.jsonl"))
+    row = json.loads((tmp_path / "sims.jsonl").read_text(encoding="utf-8"))
+    assert (row["finish_reason"], row["output_tokens"]) == ("stop", 812)
+
+
 def test_truncated_json_at_the_cap_is_length(pairs):
     ev, rec = pairs[2]
     cut = S._result(_ok_text(ev, rec)[:40], "end", {"output_tokens": 500}, finish=None)

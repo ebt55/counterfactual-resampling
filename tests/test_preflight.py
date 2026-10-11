@@ -27,9 +27,11 @@ def test_nothing_before_twenty_calls():
     assert preflight(meter_with(19)) is None
 
 
-def test_zero_cache_reads_on_all_twenty_abort():
-    with pytest.raises(PreflightAbort, match="cache_read_input_tokens is 0"):
-        preflight(meter_with(20, cached=0))
+def test_zero_cache_reads_on_all_twenty_warn_and_do_not_abort(capsys):
+    v = preflight(meter_with(20, cached=0))
+    assert v["zero_cache"] and not v["abort"] and not v["reasons"]
+    assert v["warnings"] == ["cache_read_input_tokens is 0 on all of the first 20 calls"]
+    assert "warning: cache_read_input_tokens is 0" in capsys.readouterr().err
 
 
 def test_projection_above_the_ceiling_aborts():
@@ -46,8 +48,8 @@ def test_healthy_run_passes_and_is_evaluated_once():
 
 
 def test_disabled_preflight_never_aborts():
-    v = preflight(meter_with(20, cached=0), enabled=False)
-    assert v["zero_cache"] and not v["abort"] and v["reasons"]
+    v = preflight(meter_with(20, prompt=200_000, out=4000, cached=1000), enabled=False)
+    assert not v["abort"] and v["reasons"]
 
 
 def test_prices_match_km_spend_formula(km_root):
@@ -77,6 +79,6 @@ def test_all_failed_calls_are_named_as_failures_not_as_cache_misses():
     m = CostMeter(calls_per_continuation=4.0)
     for _ in range(20):
         m.add(*DS, {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0}, ok=False)
-    with pytest.raises(PreflightAbort, match="all of the first 20 agent calls failed") as err:
-        preflight(m)
-    assert "cache_read_input_tokens" not in str(err.value)
+    v = preflight(m)
+    assert not v["abort"] and v["warnings"] == [
+        "all of the first 20 agent calls failed (API errors; see results/provider.log)"]
