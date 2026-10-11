@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import string
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -88,3 +89,28 @@ def sha256_file(path: Path) -> str:
 def sha256_text(text: str) -> str:
     """Hex sha256 of a string's UTF-8 bytes."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+# ------------------------------------------------------------------ shared helpers
+
+def utc_now() -> str:
+    """UTC now as ``YYYY-MM-DDTHH:MM:SSZ`` (every log line and result file)."""
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def load_prompt(path: Path) -> tuple[str, string.Template]:
+    """``(system text, user template)`` from a prompt file with ``=== system ===`` and
+    ``=== user ===`` marker lines (``prompts/simulator_v1.txt``, ``prompts/discriminator_v1.txt``)."""
+    text = Path(path).read_text(encoding="utf-8")
+    head, sep, rest = text.partition("=== system ===\n")
+    system, sep2, user = rest.partition("=== user ===\n")
+    if head or not sep or not sep2:
+        raise ValueError(f"{path} lacks the === system === / === user === markers")
+    return system.rstrip("\n"), string.Template(user.rstrip("\n"))
+
+
+def prompt_sha256(system: str, user: str) -> str:
+    """The cache key of one prompt: ``sha256(system + "\x00" + user)``."""
+    return hashlib.sha256((system + "\x00" + user).encode("utf-8")).hexdigest()

@@ -6,12 +6,11 @@
 (``rab.place``).
 
 ``CallDiff`` and ``Replay`` are defined in ``rab.prefix`` (chunk B owns that file) and
-re-exported here lazily (module ``__getattr__``), so ``from rab.types import Replay``
-works and importing ``rab.types`` never pulls in Docker code or risks an import cycle.
-The re-export is B's class itself, so every field B added (``strict_ok``, ``event_id``,
-``replayed``, ``work_listing``, ``notes``, the ``first_failure`` property;
-``CallDiff.content_matched``) is there. Moving the definitions here is B's edit to make;
-consumers do not change.
+imported here, so ``from rab.types import Replay`` works with every field B added
+(``strict_ok``, ``event_id``, ``replayed``, ``work_listing``, ``notes``, ``failures``,
+the ``first_failure`` property; ``CallDiff.content_matched``). ``EventDrop`` is the one
+exception that removes an event from every arm (``rab.run`` catches it).
+``event_dict`` turns an ``Event`` or a row dict into a plain dict.
 
 Fields after the frozen ones carry defaults, so rows written before they existed still
 load.
@@ -92,16 +91,22 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 from rab import REPO_ROOT
+from rab.prefix import CallDiff, Replay  # noqa: F401  (re-exported; defined by chunk B)
 
 EVENTS_PATH = REPO_ROOT / "data" / "events.jsonl"
 
 
-def __getattr__(name: str):
-    if name in ("CallDiff", "Replay"):
-        from rab import prefix
+def event_dict(event: "Event | dict") -> dict:
+    """An ``Event`` or an ``events.jsonl`` row as a plain dict."""
+    return event.to_json() if isinstance(event, Event) else dict(event)
 
-        return getattr(prefix, name)
-    raise AttributeError(f"module 'rab.types' has no attribute {name!r}")
+
+class EventDrop(Exception):
+    """The event leaves every arm: a second replay divergence, or a leak ``drop`` verdict."""
+
+    def __init__(self, reason: str, detail: str = "") -> None:
+        super().__init__(f"{reason}: {detail}")
+        self.reason, self.detail = reason, detail
 
 
 @dataclass
@@ -197,7 +202,6 @@ class Placed:
     real_size: int
     fake_size: int | None
     size_matched: bool | None
-    fake_correct_frac: float | None
     leak_hits: list[str]
     fake_agreement: dict | None = None    # rab.place.fake_agreement() in full (fake arms)
     checks: dict = field(default_factory=dict)  # on-disk checks after placement (S)

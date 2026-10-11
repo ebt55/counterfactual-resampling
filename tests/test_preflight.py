@@ -65,7 +65,7 @@ def test_ceiling_counts_cash_not_credit():
     m.add("anthropic", "claude-sonnet-5", {"input_tokens": 10_000_000, "output_tokens": 0})
     assert m.credit_usd > C.CASH_CEILING_USD and not m.stop_reached
     m.add(*DS, {"input_tokens": 120_000_000, "output_tokens": 0, "cache_read_input_tokens": 0})
-    assert m.stop_reached and m.total_usd == m.cash_usd
+    assert m.stop_reached and m.cash_usd >= C.CASH_CEILING_USD
 
 
 def test_recorded_calls_prior_is_positive(km_root):

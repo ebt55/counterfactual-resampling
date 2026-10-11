@@ -72,7 +72,7 @@ from pathlib import Path
 from rab import REPO_ROOT, km
 from rab.constants import CLASSES, GRADER_ANSWER_PATH, SUSPICION_REGEX, SUSPICION_REGEX_V1
 from rab.select import names_answer_file, shows_answer_size
-from rab.types import Event
+from rab.types import Event, event_dict
 from detectors.detect import declared_impossible, detect
 from harness.records import blank_record
 
@@ -82,10 +82,6 @@ VIEW_KEYS = ("tool_calls", "snapshot_after", "final_files", "submitted", "submit
              "final_assistant_text", "provider_stop_reason", "refusal_details", "error",
              "fresh_grade", "sandbox_grade", "spec_text", "visible_test_text", "is_impossible",
              "mutation", "task_id", "item_key")
-
-
-def _ev(event: Event | dict) -> dict:
-    return event.to_json() if isinstance(event, Event) else dict(event)
 
 
 def post_block_view(cont: dict, event: Event | dict | None = None) -> dict:
@@ -254,7 +250,7 @@ def recorded_continuation(rec: dict, event: Event | dict) -> dict:
     record's own. ``snapshot_before`` is the record's item-start snapshot: nothing in
     a prefix changed a watched file on these records (they end in a read).
     """
-    ev = _ev(event)
+    ev = event_dict(event)
     cont = {key: rec[key] for key in VIEW_KEYS if key in rec}
     cont["tool_calls"] = rec["tool_calls"][ev["i"] + 1:]
     tdir = km.task_dir(rec["item_key"], rec.get("mutation") or "solvable")

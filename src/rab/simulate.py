@@ -26,9 +26,8 @@ adaptive thinking when it is omitted; a non-default temperature is a 400). No
 server-side ``fallbacks``: a declined request must stay an SA refusal, not become
 another model's file. SB = ``z-ai/glm-5.3-flash`` on OpenRouter, temperature 0,
 ``provider.order = [SB_PROVIDER_TAG]`` with ``allow_fallbacks: False``
-(:class:`OpenAICompatSimulator`; raises while ``SB_PROVIDER_TAG`` is None). The SB
-fallback ``gpt-5.6-luna`` (KM's ``openai`` preset, temperature 0) is selected only by
-``make_caller("SB", sb_fallback=True)``. Both OpenAI-style families build the request
+(:class:`OpenAICompatSimulator`; raises while ``SB_PROVIDER_TAG`` is None). SB's fakes
+are static: drawn and scored, never continued (design v2 B). SB builds the request
 with KM's own ``make(...)._body`` (key, headers, model, temperature, ``extra_body``) and
 POST it without the ``tools`` key: KM's ``chat()`` always sends ``"tools": [...]`` and
 OpenAI-style APIs reject an empty list, so ``chat(system, msgs, tools=[])`` is not used.
@@ -52,7 +51,6 @@ call's live output and by the continuation loop on every post-block output.
 from __future__ import annotations
 
 import ast
-import hashlib
 import inspect
 import json
 import os
@@ -67,7 +65,6 @@ import rab.constants as C
 from rab import REPO_ROOT, km
 from rab.constants import (
     LEAK_WINDOW,
-    SB_FALLBACK_MODEL,
     SIM_EFFORT_SA,
     SIM_MAX_TOKENS,
     SIM_MODELS,
@@ -75,7 +72,8 @@ from rab.constants import (
     SIM_TEMPERATURE_SB,
 )
 from rab.select import LS_LINE
-from rab.types import Event, Sim
+from rab.km import prompt_sha256  # noqa: F401  (part of this module's API)
+from rab.types import Event, Sim, event_dict
 from harness.agent import TOOLS, rules_text
 from harness.providers.base import MissingKeyError, Msg, looks_like_policy_block
 
@@ -94,10 +92,6 @@ class SimulatorError(RuntimeError):
     """An API or transport failure: not a simulator outcome, never cached."""
 
 
-def _ev(event: Event | dict) -> dict:
-    return event.to_json() if isinstance(event, Event) else dict(event)
-
-
 # ------------------------------------------------------------------ prompt
 
 def template_sha256() -> str:
@@ -106,13 +100,8 @@ def template_sha256() -> str:
 
 
 def load_template() -> tuple[str, string.Template]:
-    """``(system text, user template)`` from ``simulator_v1.txt``."""
-    text = TEMPLATE_PATH.read_text(encoding="utf-8")
-    head, sep, rest = text.partition("=== system ===\n")
-    system, sep2, user = rest.partition("=== user ===\n")
-    if head or not sep or not sep2:
-        raise ValueError(f"{TEMPLATE_PATH} lacks the === system === / === user === markers")
-    return system.rstrip("\n"), string.Template(user.rstrip("\n"))
+    """``(system text, user template)`` from ``simulator_v1.txt`` (``rab.km.load_prompt``)."""
+    return km.load_prompt(TEMPLATE_PATH)
 
 
 def tools_text() -> str:
@@ -187,7 +176,7 @@ def _check_pair(rec: dict, ev: dict) -> None:
 
 def prompt_parts(rec: dict, event: Event | dict) -> dict:
     """The pieces :func:`build_prompt` inserts into the template, before joining."""
-    ev = _ev(event)
+    ev = event_dict(event)
     _check_pair(rec, ev)
     rules = rules_text("standard")
     if rec["transcript"][0]["content"] != rules:
@@ -214,10 +203,6 @@ def fill(tmpl: string.Template, parts: dict) -> str:
     return tmpl.substitute({**parts, "prefix": "\n\n".join(parts["prefix"])})
 
 
-def prompt_sha256(system: str, user: str) -> str:
-    return hashlib.sha256((system + "\x00" + user).encode("utf-8")).hexdigest()
-
-
 def prefix_texts(rec: dict, k: int) -> list[str]:
     """The prefix as leak-check sources: each ``transcript[1:k]`` content and call text."""
     out: list[str] = []
@@ -229,7 +214,7 @@ def prefix_texts(rec: dict, k: int) -> list[str]:
 
 def allowed_sources(rec: dict, event: Event | dict) -> list[str]:
     """Every allowed input of a simulator prompt (guide §4), as separate texts."""
-    ev = _ev(event)
+    ev = event_dict(event)
     system, tmpl = load_template()
     return [system, tmpl.template, rules_text("standard"), tools_text(), rec["spec_text"],
             rec["visible_test_text"], NO_LISTING, call_text(ev["call"]), *prefix_texts(rec, ev["k"])]
@@ -340,7 +325,7 @@ def prompt_leak_hits(rec: dict, event: Event | dict, system: str, user: str) -> 
     falsely.) A prompt that is not exactly the template filled with those pieces is
     itself a hit.
     """
-    ev = _ev(event)
+    ev = event_dict(event)
     real = real_file_text(km.task_dir(ev["item_key"], ev["kind"]))
     post = [c.get("output") or "" for c in rec["tool_calls"][ev["i"]:]]
     canary = real_canary(real)
@@ -598,14 +583,12 @@ class OpenAICompatSimulator:
         return _result("", "error", detail=last)
 
 
-def make_caller(family: str, *, sb_fallback: bool = False):
+def make_caller(family: str):
     """The live caller for a family. Needs the family's key in the repo ``.env``."""
     if family == "SA":
         return AnthropicSimulator()
     if family != "SB":
         raise ValueError(f"unknown simulator family {family!r}")
-    if sb_fallback:
-        return OpenAICompatSimulator("openai", SB_FALLBACK_MODEL)
     if C.SB_PROVIDER_TAG is None:
         raise RuntimeError("constants.SB_PROVIDER_TAG is None: day 0 has not pinned the GLM upstream")
     return OpenAICompatSimulator("openrouter", SIM_MODELS["SB"],
@@ -651,7 +634,7 @@ def _add_usage(total: dict, add: dict) -> None:
 
 def draw(rec: dict, event: Event | dict, family: str, caller, cache: SimCache) -> Sim:
     """One simulator draw for (event, family), cached by ``(model, prompt sha256)``."""
-    ev = _ev(event)
+    ev = event_dict(event)
     system, user = build_prompt(rec, ev)
     psha = prompt_sha256(system, user)
     model = caller.model

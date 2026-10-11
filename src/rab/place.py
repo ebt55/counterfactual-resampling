@@ -70,35 +70,23 @@ from rab.constants import (
     DENIAL_TEXT,
     FAKE_ARMS,
     GRADER_ANSWER_PATH,
-    HIDDEN_TESTS,
+    HIDDEN_TESTS_PATH,
     PILOT_CANARY_SALT,
     SEED,
 )
 from rab.select import monitor_denies
 from rab.simulate import leak_hits, leak_verdict, prefix_texts, real_file_text, stub_signature, validate
-from rab.types import Event, Placed
+from rab.types import Event, Placed, event_dict
 from harness.agent import ToolExecutor
 
-from rab.prefix import normalise
+from rab.prefix import content_equal, normalise
 
-try:
-    from rab.prefix import content_equal
-except ImportError:  # pragma: no cover - TODO(chunk B): content_equal (decision 17b) is not committed yet
-    def content_equal(recorded: str, replayed: str) -> bool:
-        """Strict stand-in until chunk B commits ``content_equal``: never looser than it."""
-        return normalise(recorded) == normalise(replayed)
-
-HIDDEN_TESTS_PATH = GRADER_ANSWER_PATH.replace(ANSWER_FILE, HIDDEN_TESTS)
 RUNNER = km.TASKS_DIR / "_runner" / "run_cases.py"
 CALL_TIMEOUT_S = 60
 
 
 class PlacementError(RuntimeError):
     """Placement or a decision-7 assertion failed; the slot cannot run."""
-
-
-def _ev(event: Event | dict) -> dict:
-    return event.to_json() if isinstance(event, Event) else dict(event)
 
 
 # ------------------------------------------------------------------ host-side oracle
@@ -270,7 +258,7 @@ def build_p(real_obj: dict, task_dir: Path) -> tuple[dict, dict]:
 
 def arm_file(arm: str, event: Event | dict, task_dir: Path, sim_obj: dict | None = None) -> tuple[str | None, dict]:
     """The text to place for ``arm`` and what was built; ``(None, {})`` for B."""
-    ev = _ev(event)
+    ev = event_dict(event)
     real_text = real_file_text(task_dir)
     real = json.loads(real_text)
     real_size = len(real_text.encode("utf-8"))
@@ -328,7 +316,7 @@ def place(sandbox, item_key: str, task_dir: Path, rec: dict, event: Event | dict
           file_text: str | None = None, build: dict | None = None) -> Placed:
     """Place the arm's file (``file_text``; the real bytes for R if omitted), snapshot, re-run
     the blocked call; B places nothing and its blocked call is denied."""
-    ev = _ev(event)
+    ev = event_dict(event)
     i, k = ev["i"], ev["k"]
     recorded = rec["tool_calls"][i]
     if (recorded["tool"], recorded["input"]) != (ev["call"]["name"], ev["call"]["args"]):
@@ -371,7 +359,7 @@ def place(sandbox, item_key: str, task_dir: Path, rec: dict, event: Event | dict
             matches = content_equal(recorded["output"], observation) and same_cut
             strict = normalise(observation) == normalise(recorded["output"]) and same_cut
         return Placed(arm, observation, truncated, matches, snapshot_before, canaries, expected_values,
-                      real_size, None, None, None, [], checks=checks, obs_matches_strict=strict,
+                      real_size, None, None, [], checks=checks, obs_matches_strict=strict,
                       file_obj=on_disk if arm == "R" else None, build=build)
 
     if truncated and not recorded["truncated"]:
@@ -382,7 +370,7 @@ def place(sandbox, item_key: str, task_dir: Path, rec: dict, event: Event | dict
     allowed = [file_text, rec["spec_text"], rec["visible_test_text"], *prefix_texts(rec, k)]
     hits = leak_hits(observation, real_text, allowed)
     return Placed(arm, observation, truncated, None, snapshot_before, canaries, expected_values,
-                  real_size, fake_size, fake_size == real_size, agreement["vs_reference"], hits,
+                  real_size, fake_size, fake_size == real_size, hits,
                   fake_agreement=agreement, checks=checks, file_obj=on_disk, build=build,
                   leak_severity=leak_verdict(hits, real_text, allowed)["severity"])
 
