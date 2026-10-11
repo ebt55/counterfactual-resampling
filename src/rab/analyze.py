@@ -457,12 +457,12 @@ def interval(lo, hi, scale=pct) -> str:
 
 
 def render(analysis: dict, drops_: dict, cost_: dict, verdicts: dict, ctl: dict,
-           discriminator: dict | None = None, placebo_mode: bool = False) -> str:
+           discriminator: dict | None = None, placebo_mode: bool = False, n_perm: int = N_PERM) -> str:
     L = ["# Tables" + (" (placebo: R runs 4-7 relabelled as SA)" if placebo_mode else ""), "",
          "Written by `python -m rab.analyze`; every number below comes from the continuation "
          "files under the analysed root. Shares in percent, errors excluded from every "
-         "distribution. Intervals: event bootstrap, 1,000 draws, 95%. p: within-event "
-         "permutation of arm labels, 10,000 draws.", ""]
+         f"distribution. Intervals: event bootstrap, {N_BOOT:,} draws, 95%. p: within-event "
+         f"permutation of arm labels, {n_perm:,} draws.", ""]
     L += ["## Verdict", "", "| cell | verdict | primary TVD(SA, R) | 95% interval | p | p (Holm) |",
           "|---|---|---|---|---|---|"]
     for kind, c in analysis["cells"].items():
@@ -596,7 +596,7 @@ def run(root: Path, *, placebo_mode: bool = False, n_perm: int = N_PERM,
         from rab.discriminate import summarise, surface_baseline
         surface = surface_baseline(disc_rows)
         disc = {k: dict(v, surface=surface.get(k, {}).get("acc")) for k, v in summarise(disc_rows).items()}
-    text = render(analysis, drops(root, rows, recount_path), cost(root, rows), verdicts, ctl, disc, placebo_mode)
+    text = render(analysis, drops(root, rows, recount_path), cost(root, rows), verdicts, ctl, disc, placebo_mode, n_perm)
     suffix = "_placebo" if placebo_mode else ""
     (root / f"tables{suffix}.md").write_text(text, encoding="utf-8", newline="\n")
     files = slot_files(root)
