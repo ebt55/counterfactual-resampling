@@ -1,0 +1,2 @@
+# LF everywhere: data/events.jsonl and prompt files are pinned by sha256 in PREREG.
+* text=auto eol=lf
