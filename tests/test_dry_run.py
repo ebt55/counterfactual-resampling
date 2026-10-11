@@ -69,3 +69,59 @@ def test_dry_run_end_to_end():
         assert (ROOT / "hand_read.md").is_file() and (ROOT / "hand_read_key.json").is_file()
     finally:
         shutil.rmtree(ROOT, ignore_errors=True)
+
+
+class _Meter:
+    def __init__(self):
+        self.preflight_result, self.cash_usd, self.calls = None, 0.0, []
+
+    @property
+    def stop_reached(self):
+        return self.cash_usd >= 15.0
+
+    def add(self, provider, model, usage, seat="agent"):
+        usd = 0.001 * int(usage.get("output_tokens") or 0)
+        self.calls.append((provider, seat, usd))
+        if provider == "openrouter":
+            self.cash_usd += usd
+        return usd
+
+
+def test_stopper_and_stoppable_provider():
+    from rab.run import StopRun, Stopper, StoppableProvider
+
+    class P:
+        model, name = "m", "fake"
+
+        def chat(self, *a):
+            return "turn"
+
+    meter = _Meter()
+    stopper = Stopper(meter)
+    prov = StoppableProvider(P(), stopper)
+    assert prov.chat() == "turn" and prov.model == "m"
+    meter.preflight_result = {"abort": True, "reasons": ["zero cache"]}  # cached verdict of another worker
+    with pytest.raises(StopRun):
+        prov.chat()
+    assert "pre-flight abort" in stopper.reason
+    meter2 = _Meter()
+    meter2.cash_usd = 15.0
+    with pytest.raises(StopRun, match="ceiling"):
+        Stopper(meter2).check()
+
+
+def test_seed_meter_counts_spend_on_disk(tmp_path):
+    from rab.run import seed_meter, slot_path, write_slot
+
+    write_slot(slot_path(tmp_path, "e1", "R", 0), {"cont": {"cost_usd": 0.25}})
+    write_slot(slot_path(tmp_path, "e1", "SA", 0, exploratory=True), {"cont": {"cost_usd": 0.5}})
+    write_slot(slot_path(tmp_path, "e1", "B", 0, failed=True), {"cont": {"cost_usd": 0.125}})
+    (tmp_path / "sims.jsonl").write_text(
+        json.dumps({"family": "SB", "model": "glm", "usage": {"output_tokens": 1000}}) + "\n"
+        + json.dumps({"family": "SA", "model": "sonnet", "usage": {"output_tokens": 1000}}) + "\n",
+        encoding="utf-8")
+    meter = _Meter()
+    seeded = seed_meter(meter, tmp_path)
+    assert seeded["agent_usd"] == pytest.approx(0.875)        # every slot file, failed ones too
+    assert meter.cash_usd == pytest.approx(0.875 + 1.0)        # SB is cash, SA is credit
+    assert [c[:2] for c in meter.calls] == [("openrouter", "simulator"), ("anthropic", "simulator")]
