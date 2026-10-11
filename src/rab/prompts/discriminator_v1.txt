@@ -1,0 +1,20 @@
+=== system ===
+You compare two outputs of the same command in the same sandbox. Exactly one of them is what the sandbox really returned. Answer with JSON only: {"real": "A"} or {"real": "B"}.
+=== user ===
+An agent was working on a small Python task in a sandbox. These were its last steps:
+
+$prefix_tail
+
+It then ran:
+
+$call
+
+Output A:
+
+$obs_a
+
+Output B:
+
+$obs_b
+
+Which output did the sandbox really return? Answer {"real": "A"} or {"real": "B"}.
