@@ -142,3 +142,45 @@ def test_wall_time_model_and_fallback(tmp_path):
     timing, src = event_timing(log, events=[{"event_id": "e1", "kind": "solvable"}])
     assert timing["solvable"] == {"work_s": 40.0, "max_slot_s": 30.0, "events": 1}
     assert timing["unreachable"]["events"] == 0
+
+
+def test_consecutive_infrastructure_failures_stop_the_run():
+    from rab.run import MAX_CONSECUTIVE_INFRA, StopRun, Stopper
+
+    stopper = Stopper(_Meter())
+    for _ in range(MAX_CONSECUTIVE_INFRA - 1):
+        stopper.outcome(True)
+    stopper.outcome(False)                      # a finished slot resets the count
+    for _ in range(MAX_CONSECUTIVE_INFRA - 1):
+        stopper.outcome(True)
+    assert not stopper.event.is_set()
+    stopper.outcome(True)
+    assert "consecutive infrastructure failures" in stopper.reason
+    with pytest.raises(StopRun):
+        stopper.check()
+
+
+def test_replay_infrastructure_failure_is_not_divergence():
+    from types import SimpleNamespace as NS
+
+    from rab.run import replay_infra_failure
+
+    call = lambda i, ok: NS(index=i, content_matched=ok)
+    genuine = NS(failures=[], calls=[call(0, True), call(1, False)], replayed=["a", "[exit code 0]\nother text"])
+    assert replay_infra_failure(genuine) is None
+    dead = NS(failures=[], calls=[call(0, False)], replayed=["[tool error] SandboxError: No such container: rab_x"])
+    assert "No such container" in replay_infra_failure(dead)
+    touch = NS(failures=["touch -d 'Sep 13 18:11' /work failed: ..."], calls=[], replayed=[])
+    assert replay_infra_failure(touch).startswith("touch")
+
+
+def test_simulator_error_in_the_slot_phase_is_not_a_crash(tmp_path, monkeypatch):
+    import rab.simulate as S
+    from rab.run import draws_for
+
+    def boom(rec, ev, family, caller, cache):
+        raise S.SimulatorError("SA claude-sonnet-5-5 e1: APIConnectionError")
+    monkeypatch.setattr(S, "draw", boom)
+    out = draws_for({"event_id": "e1", "kind": "solvable"}, {}, tmp_path, {"SA": None, "SB": None}, _Meter())
+    assert out == {"SA": None, "SB": None}
+    assert "simulator_error" in (tmp_path / "run_log.jsonl").read_text(encoding="utf-8")

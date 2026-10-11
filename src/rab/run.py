@@ -56,8 +56,19 @@ checked this way: a fake arm's blocked-call output has no recording to compare w
 R retries are counted in each slot (``replay.r_divergence_retries``). A continuation
 whose ``rerun`` is set is re-run once.
 
+Infrastructure versus behaviour. A container that dies during the replay (a Docker or
+sandbox error, a failed ``/tmp`` or ``touch`` step, a tool call that could not execute)
+is an infrastructure failure: ``.failed``, retried on resume. ``replay_divergence`` drops
+the event only when the replay ran to completion and a prefix output genuinely differs
+under ``content_equal``. A ``SimulatorError`` in the slot phase marks that arm's slots
+``.failed``. Finished slot files are never deleted for an infrastructure cause.
+
 Stops. One stop flag for the run: set by ``ProviderPinError``, ``PreflightAbort`` (also
-when it is the cached verdict of another worker), the $15 cash ceiling, or Ctrl-C. Every
+when it is the cached verdict of another worker), the $15 cash ceiling,
+:data:`MAX_CONSECUTIVE_INFRA` consecutive slots ending in ``api_error`` or
+``docker_error`` ("consecutive infrastructure failures": an outage; restart after it),
+or Ctrl-C (queued slots are cancelled and the slots already running are waited for and
+written). A dirty working tree is warned about loudly at start, never refused. Every
 slot checks it at its start, and the agent provider is wrapped (:class:`StoppableProvider`)
 so the flag is checked before every provider call inside ``resume``; a stopped slot is
 not written, queued slots are cancelled, and the run raises after cleaning up. The cost
@@ -95,6 +106,11 @@ RESULTS = REPO_ROOT / "results"
 DRY_ROOT = RESULTS / "dry"
 DRY_EVENTS_PER_KIND = 2
 PREDRAW_THREADS = 6
+MAX_CONSECUTIVE_INFRA = 6
+INFRA_CLASSES = ("api_error", "docker_error")
+#: Text a tool call returns when the container, not the agent, failed (KM's ToolExecutor
+#: turns the exception into output): such a replay mismatch is infrastructure, not divergence.
+INFRA_MARKERS = ("[tool error]", "Error response from daemon", "No such container", "is not running")
 
 #: Wall-time model input: per kind, the median over a pilot's events of the summed slot
 #: seconds (``work_s``) and of the longest slot (``max_slot_s``), from
@@ -115,6 +131,10 @@ class ArmDrop(Exception):
     def __init__(self, arm: str, reason: str) -> None:
         super().__init__(f"{arm}: {reason}")
         self.arm, self.reason = arm, reason
+
+
+class InfraError(RuntimeError):
+    """The replay's container or a host-side step failed: retry, never drop."""
 
 
 class StopRun(BaseException):
@@ -198,11 +218,21 @@ def select_events(events: list[dict], per_kind: int | None = None, pilot: int | 
 class Stopper:
     """The run's one stop flag, with the reason; checked between slots and provider calls."""
 
-    def __init__(self, meter) -> None:
+    def __init__(self, meter, max_consecutive_infra: int = MAX_CONSECUTIVE_INFRA) -> None:
         self.event = threading.Event()
         self.reason: str | None = None
         self.error: BaseException | None = None
         self.meter = meter
+        self.max_consecutive_infra = max_consecutive_infra
+        self.consecutive_infra = 0
+        self._lock = threading.Lock()
+
+    def outcome(self, infra: bool) -> None:
+        """Count slots ending in an infrastructure failure in a row; an outage stops the run."""
+        with self._lock:
+            self.consecutive_infra = self.consecutive_infra + 1 if infra else 0
+            if self.consecutive_infra >= self.max_consecutive_infra:
+                self.stop(f"consecutive infrastructure failures ({self.consecutive_infra} slots)")
 
     def stop(self, reason: str, error: BaseException | None = None) -> None:
         if not self.event.is_set():
@@ -289,17 +319,41 @@ def wall_estimate_s(n_by_kind: dict[str, int], workers: int, timing: dict) -> fl
 
 # ------------------------------------------------------------------ one slot
 
+def replay_infra_failure(rep) -> str | None:
+    """Why a non-``ok`` replay is an infrastructure failure, or None if it genuinely diverged."""
+    if rep.failures:
+        return "; ".join(rep.failures)[:300]
+    for c in rep.calls:
+        if not c.content_matched:
+            out = rep.replayed[c.index] if c.index < len(rep.replayed) else ""
+            if any(m in out for m in INFRA_MARKERS):
+                return f"call {c.index}: {out[:200]}"
+    return None
+
+
 def _replay_ok(rec: dict, ev: dict, batch_id: str):
-    """Replay with one retry in a fresh container (decision 6); raises EventDrop."""
+    """Replay with one retry in a fresh container (decision 6).
+
+    Raises :class:`InfraError` when the container or a host-side step failed (the slot is
+    retried, then ``.failed``), and ``EventDrop("replay_divergence")`` only when both
+    replays ran to completion and a prefix output differed under ``content_equal``.
+    """
+    from harness.sandbox import SandboxError
     from rab.prefix import replay
 
     first = None
     for attempt in (1, 2):
-        rep = replay(rec, ev, batch_id=f"{batch_id}-r{attempt}")
+        try:
+            rep = replay(rec, ev, batch_id=f"{batch_id}-r{attempt}")
+        except (SandboxError, OSError, subprocess.SubprocessError) as exc:
+            raise InfraError(f"replay: {type(exc).__name__}: {exc}") from exc
         if rep.ok:
             return rep, attempt
-        first = [c.diff_excerpt[:300] for c in rep.calls if not c.content_matched] + rep.failures
+        infra = replay_infra_failure(rep)
         rep.close()
+        if infra:
+            raise InfraError(f"replay: {infra}")
+        first = [c.diff_excerpt[:300] for c in rep.calls if not c.content_matched]
     raise EventDrop("replay_divergence", json.dumps(first)[:600])
 
 
@@ -380,7 +434,8 @@ def run_slot_with_rerun(ev, rec, arm, run_idx, **kw) -> tuple[str, dict]:
             stopper.stop(f"{type(exc).__name__}: {exc}", exc)
             raise StopRun(stopper.reason) from exc
         except Exception as exc:
-            last = {"error": f"{type(exc).__name__}: {exc}", "trace": traceback.format_exc()[-1500:]}
+            last = {"error": f"{type(exc).__name__}: {exc}", "trace": traceback.format_exc()[-1500:],
+                    "error_class": "docker_error" if isinstance(exc, InfraError) else "exception"}
             log_line(root, {"event_id": ev["event_id"], "arm": arm, "run_idx": run_idx, "attempt": attempt,
                             "status": "exception", **last})
             continue
@@ -406,7 +461,7 @@ def _git_sim_cache(path: Path, meter, exploratory: bool):
     class GitSimCache(SimCache):
         def put(self, sim) -> None:
             row = {**sim.to_json(), "git": git_state(), "exploratory": exploratory}
-            with _sim_lock:
+            with _sim_lock, self._lock:
                 _meter_sim(meter, sim.family, sim.model, sim.usage or {})
                 self._rows[(sim.model, sim.prompt_sha256)] = row
                 if self.path:
@@ -421,10 +476,17 @@ def draws_for(ev: dict, rec: dict, root: Path, callers: dict, meter, exploratory
     """SA and SB draws for one event (cached); a prompt leak ``drop`` raises EventDrop."""
     from rab.simulate import draw
 
+    from rab.simulate import SimulatorError
+
     cache = _git_sim_cache(root / "sims.jsonl", meter, exploratory)
     out = {}
     for family in ("SA", "SB"):
-        sim = draw(rec, ev, family, callers[family], cache)
+        try:
+            sim = draw(rec, ev, family, callers[family], cache)
+        except SimulatorError as exc:  # transport or API failure: not an outcome, retried on resume
+            log_line(root, {"event_id": ev["event_id"], "simulator_error": family, "error": str(exc)[:500]})
+            out[family] = None
+            continue
         out[family] = sim
         if sim.failure == "leak":
             with _log_lock, open(root / "leaks.jsonl", "a", encoding="utf-8", newline="\n") as fh:
@@ -522,6 +584,13 @@ def run(*, dry_run: bool, root: Path, per_kind: int | None, pilot: int | None, w
     started = time.time()
     done = skipped = failed = 0
     dropped, arm_drops = [], []
+    gs = git_state()
+    if gs["dirty"]:
+        bar = "!" * 78
+        print(f"{bar}\n[run] WARNING: the working tree has uncommitted changes to tracked files.\n"
+              f"[run] Every result records git {gs['git_hash']} with dirty=true; commit first if these\n"
+              f"[run] results should be traceable to a commit. Running anyway (never refused).\n{bar}",
+              file=sys.stderr, flush=True)
     print(f"[run] {len(events)} events, {workers} workers, root {root}, dry_run={dry_run}, "
           f"exploratory={exploratory}, git {git_state()}, spend on disk {seeded}", file=sys.stderr, flush=True)
     timing, timing_src = event_timing(events=None)
@@ -556,61 +625,84 @@ def run(*, dry_run: bool, root: Path, per_kind: int | None, pilot: int | None, w
                 _drop_event(root, ev, drop, exploratory, slots)
                 continue
             sa = sims["SA"]
-            if not sa.ok:
+            sim_failed = []
+            if sa is None:  # SimulatorError: SA and SSTAR slots fail, retried on resume
+                sim_failed = [(a, j) for a, j in todo if a in ("SA", "SSTAR")]
+                todo = [(a, j) for a, j in todo if a not in ("SA", "SSTAR")]
+            elif not sa.ok:
                 for a in ("SA", "SSTAR"):
                     _write_json(armdrop_path(root, eid, a, exploratory),
                                 {"event_id": eid, "kind": ev["kind"], "arm": a, "reason": f"SA draw failed: {sa.failure}",
                                  "exploratory": exploratory, "git": git_state()})
                 todo = [(a, j) for a, j in todo if a not in ("SA", "SSTAR")]
-            kw = dict(root=root, sim_obj=sa.obj if sa.ok else None, provider_for=provider_for, meter=meter,
-                      dry_run=dry_run, event_index=idx, stopper=stopper)
+            for a, j in sim_failed:
+                write_slot(slot_path(root, eid, a, j, exploratory, failed=True),
+                           {"event_id": eid, "arm": a, "run_idx": j, "kind": ev["kind"], "task_id": ev["task_id"],
+                            "error_class": "simulator_error", "exploratory": exploratory, "git": git_state()})
+                failed += 1
+            kw = dict(root=root, sim_obj=sa.obj if (sa is not None and sa.ok) else None, provider_for=provider_for,
+                      meter=meter, dry_run=dry_run, event_index=idx, stopper=stopper)
             t_ev = time.time()
             event_drop = None
+            interrupted = False
             pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="rabw")
+
+            def handle(fut, a, j) -> None:
+                nonlocal event_drop, done, failed
+                try:
+                    status, out = fut.result()
+                except EventDrop as drop:
+                    event_drop = event_drop or drop
+                    return
+                except ArmDrop as ad:
+                    p = armdrop_path(root, eid, ad.arm, exploratory)
+                    if not p.is_file():
+                        arm_drops.append(f"{eid}:{ad.arm}")
+                        _write_json(p, {"event_id": eid, "kind": ev["kind"], "arm": ad.arm, "reason": ad.reason,
+                                        "exploratory": exploratory, "git": git_state()})
+                        log_line(root, {"event_id": eid, "arm_drop": ad.arm, "reason": ad.reason})
+                    return
+                except (StopRun, CancelledError):
+                    return
+                out["exploratory"] = exploratory
+                if status == "done":
+                    write_slot(slot_path(root, eid, a, j, exploratory), out)
+                    slot_path(root, eid, a, j, exploratory, failed=True).unlink(missing_ok=True)
+                    done += 1
+                    stopper.outcome(False)
+                else:
+                    write_slot(slot_path(root, eid, a, j, exploratory, failed=True), out)
+                    failed += 1
+                    stopper.outcome(out.get("error_class") in INFRA_CLASSES)
+
+            futs = {pool.submit(run_slot_with_rerun, ev, rec, a, j, **kw): (a, j) for a, j in todo}
+            pending = list(futs.items())
             try:
-                futs = {pool.submit(run_slot_with_rerun, ev, rec, a, j, **kw): (a, j) for a, j in todo}
-                for fut, (a, j) in futs.items():
-                    try:
-                        status, out = fut.result()
-                    except EventDrop as drop:
-                        event_drop = event_drop or drop
-                        continue
-                    except ArmDrop as ad:
-                        p = armdrop_path(root, eid, ad.arm, exploratory)
-                        if not p.is_file():
-                            arm_drops.append(f"{eid}:{ad.arm}")
-                            _write_json(p, {"event_id": eid, "kind": ev["kind"], "arm": ad.arm, "reason": ad.reason,
-                                            "exploratory": exploratory, "git": git_state()})
-                            log_line(root, {"event_id": eid, "arm_drop": ad.arm, "reason": ad.reason})
-                        continue
-                    except StopRun:
+                while pending:
+                    fut, (a, j) = pending[0]
+                    if stopper.event.is_set():
                         pool.shutdown(wait=False, cancel_futures=True)
-                        continue
-                    except CancelledError:
-                        continue
-                    except BaseException:
-                        stopper.stop("interrupted")
-                        pool.shutdown(wait=False, cancel_futures=True)
-                        raise
-                    if event_drop is not None:
-                        continue
-                    if status == "done":
-                        out["exploratory"] = exploratory
-                        write_slot(slot_path(root, eid, a, j, exploratory), out)
-                        slot_path(root, eid, a, j, exploratory, failed=True).unlink(missing_ok=True)
-                        done += 1
-                    else:
-                        out["exploratory"] = exploratory
-                        write_slot(slot_path(root, eid, a, j, exploratory, failed=True), out)
-                        failed += 1
+                    handle(fut, a, j)
+                    pending.pop(0)
+            except KeyboardInterrupt:
+                # cancel what has not started, wait for what is running, write what finishes
+                interrupted = True
+                pool.shutdown(wait=False, cancel_futures=True)
+                print("[run] Ctrl-C: waiting for the running slots to finish and writing them "
+                      "(Ctrl-C again aborts without writing)", file=sys.stderr, flush=True)
+                for fut, (a, j) in pending:
+                    handle(fut, a, j)
             finally:
                 pool.shutdown(wait=True, cancel_futures=True)
-            if event_drop is not None:
+            if event_drop is not None and not interrupted:
                 dropped.append(eid)
                 _drop_event(root, ev, event_drop, exploratory, slots)
             print(f"[run] event {idx + 1}/{len(events)} {eid} ({ev['kind']}): {len(todo)} slots in "
                   f"{time.time() - t_ev:.1f}s{' DROPPED ' + event_drop.reason if event_drop else ''}; "
                   f"cash ${meter.cash_usd:.4f}", file=sys.stderr, flush=True)
+            if interrupted:
+                stopper.stop("interrupted (Ctrl-C)")
+                break
             if stopper.event.is_set():
                 break
     except StopRun:
