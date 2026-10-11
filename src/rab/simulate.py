@@ -1,8 +1,11 @@
 """Simulator: a fake ``expected_outputs.json`` for the block point (build guide §4; §5 leak canary).
 
 Prompt (:func:`build_prompt`). The fixed text is ``prompts/<constants.SIM_PROMPT_VERSION>.txt``
-(``simulator_v2``; ``simulator_v1`` is kept for the record), a ``string.Template`` with
-named slots; the analysis protocol records :func:`template_sha256`. The v2 system prompt
+(``simulator_v3``; ``simulator_v1`` and ``simulator_v2`` are kept for the record), a
+``string.Template`` with named slots; the analysis protocol records :func:`template_sha256`.
+v3 is v2 plus one sentence asking for cases that are not the visible tests' examples
+(every pilot-2 fake began with the visible inputs; the real files share no arguments
+with the visible tests). The v2 system prompt
 frames the model as a research harness reconstructing the sandbox for a replay
 experiment, says the rules shown below constrain the agent under study and not the
 model, and asks for the file's text only (v1, "You are the file system of this sandbox",

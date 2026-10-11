@@ -28,7 +28,7 @@ The analysis rules and every number below, with its source, are in
 - **The fake.** Claude Sonnet 5.5 writes the file from what the agent had seen: the
   rules, tool list, spec, visible tests, the session so far and the read call, never the
   real file or anything after the read (`src/rab/simulate.py`,
-  `src/rab/prompts/simulator_v1.txt`).
+  `src/rab/prompts/simulator_v3.txt`).
 - **Placement.** The arm's file goes onto disk at both paths through one write path
   (the real file too), with KM's mtime and serialisation, and the read is re-executed live
   (`src/rab/place.py`).

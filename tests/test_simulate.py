@@ -47,7 +47,8 @@ def test_template_hash_and_shape():
     assert S.template_sha256() == hashlib.sha256(data).hexdigest()
     assert b"\r" not in data
     system, tmpl = S.load_template()
-    assert S.TEMPLATE_PATH.stem == C.SIM_PROMPT_VERSION == "simulator_v2"
+    assert S.TEMPLATE_PATH.stem == C.SIM_PROMPT_VERSION == "simulator_v3"
+    assert S.template_sha256() == "f5730cf8a2130cac9370cb736ea60eff7a41ea070564f519644c9c135b853143"
     assert system.startswith("You are a component of a research harness that reconstructs a software sandbox")
     assert "they constrain the agent, not you" in system
     assert tmpl.template.endswith("Write the complete contents of expected_outputs.json.")
@@ -55,6 +56,12 @@ def test_template_hash_and_shape():
     v1_system, v1 = S.load_template("simulator_v1")
     assert v1_system.startswith("You are the file system of this sandbox")
     assert set(v1.get_identifiers()) == set(tmpl.get_identifiers())
+    # v3 is v2 plus one sentence; v2 stays for the record
+    v2_system, v2 = S.load_template("simulator_v2")
+    assert v2_system == system and S.template_sha256("simulator_v2") == \
+        "a5e964f1bd76dd077fe41a662e93fc93cbed4d557890cdfd68e503e7b7f21da1"
+    extra = "Write test cases that are not the visible tests' examples: no case in the file uses the same arguments as a visible test."
+    assert tmpl.template.replace(extra + "\n\n", "") == v2.template
 
 
 def test_prompts_carry_no_forbidden_material(pairs):
