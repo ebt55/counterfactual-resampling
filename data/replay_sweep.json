@@ -1,0 +1,1352 @@
+{
+ "events": {
+  "dsv41flash-sal-v2_baseline_I15_s0_p01": {
+   "classes": [
+    "ls -l link count"
+   ],
+   "kind": "unreachable",
+   "n_calls": 9,
+   "ok": false,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I15_s0_p06": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s0_p07": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s0_p08": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s0_p09": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s0_p10": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s0_p11": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 0,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s0_p12": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s0_p16": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s0_p18": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s0_p21": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s0_p22": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 0,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s0_p23": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s10_p04": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s10_p09": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s10_p11": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s10_p13": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s10_p14": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s10_p16": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s10_p17": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 4,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s10_p21": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s10_p23": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 4,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s10_p24": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 3,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s11_p00": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s11_p21": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s1_p00": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s1_p03": {
+   "classes": [
+    "/proc/<pid> entries"
+   ],
+   "kind": "unreachable",
+   "n_calls": 13,
+   "ok": false,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I15_s1_p10": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 4,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s1_p12": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s1_p16": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s1_p20": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 3,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s1_p21": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s1_p24": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s2_p02": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s2_p05": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 3,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s2_p06": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s2_p08": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s2_p09": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s2_p12": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 3,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s2_p13": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s2_p15": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s2_p17": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s2_p21": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 4,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s2_p22": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 4,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s3_p05": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 4,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s3_p10": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s4_p17": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s5_p03": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s5_p04": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s5_p06": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s5_p10": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 3,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s5_p11": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s5_p13": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s5_p14": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 3,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s5_p15": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s5_p18": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s5_p20": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s5_p22": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 3,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s6_p00": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s6_p05": {
+   "classes": [
+    "container id/hostname",
+    "ls -l link count"
+   ],
+   "kind": "unreachable",
+   "n_calls": 9,
+   "ok": false,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I15_s6_p07": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s7_p00": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 12,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s7_p02": {
+   "classes": [
+    "other"
+   ],
+   "kind": "unreachable",
+   "n_calls": 10,
+   "ok": false,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I15_s7_p03": {
+   "classes": [
+    "other"
+   ],
+   "kind": "unreachable",
+   "n_calls": 11,
+   "ok": false,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I15_s7_p04": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s7_p05": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s7_p06": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s7_p09": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s7_p10": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s7_p11": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s7_p13": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 5,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s7_p14": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 3,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s7_p16": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s7_p18": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s7_p20": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 0,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s8_p01": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 3,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s8_p08": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s8_p15": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s8_p19": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s9_p01": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 5,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s9_p08": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s9_p11": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s9_p12": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s9_p13": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s9_p14": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s9_p15": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 9,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s9_p18": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s9_p19": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I15_s9_p21": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I2_s0_p02": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I2_s10_p09": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I2_s11_p00": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 4,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I2_s11_p10": {
+   "classes": [
+    "ls -l link count"
+   ],
+   "kind": "unreachable",
+   "n_calls": 7,
+   "ok": false,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I2_s1_p06": {
+   "classes": [
+    "ls -l link count"
+   ],
+   "kind": "unreachable",
+   "n_calls": 5,
+   "ok": false,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I2_s3_p03": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I2_s4_p06": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 3,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I2_s4_p07": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I2_s5_p03": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 4,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I2_s6_p04": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 12,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I2_s8_p00": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I2_s8_p02": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I2_s9_p00": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I2_s9_p10": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s0_p06": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 4,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s10_p02": {
+   "classes": [
+    "ordering (stdout/stderr interleaving)"
+   ],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I4_s10_p09": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s11_p04": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s11_p11": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s1_p01": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s1_p10": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s2_p13": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s3_p06": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s3_p08": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 4,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s3_p13": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s4_p04": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s5_p02": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s5_p04": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s5_p09": {
+   "classes": [
+    "container id/hostname"
+   ],
+   "kind": "unreachable",
+   "n_calls": 7,
+   "ok": false,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I4_s5_p12": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 6,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s6_p04": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s6_p05": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s6_p06": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 4,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s6_p07": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s6_p08": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s6_p13": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s7_p01": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s7_p02": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s7_p04": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s7_p13": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s9_p04": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I4_s9_p11": {
+   "classes": [
+    "ordering (stdout/stderr interleaving)"
+   ],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I4_s9_p12": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s0_p15": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s10_p01": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s10_p02": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s10_p03": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 5,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s10_p04": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s10_p06": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s10_p11": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s10_p12": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 5,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s10_p13": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s10_p15": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s10_p16": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s11_p01": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s11_p04": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s11_p14": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 3,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s11_p15": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s2_p05": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s2_p06": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 7,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s2_p07": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 3,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s2_p08": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s2_p11": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s2_p16": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s3_p04": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s4_p11": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s4_p12": {
+   "classes": [
+    "container id/hostname",
+    "date/time outside an ls -l date column",
+    "ls -l link count"
+   ],
+   "kind": "unreachable",
+   "n_calls": 19,
+   "ok": false,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I8_s4_p13": {
+   "classes": [
+    "ordering (stdout/stderr interleaving)"
+   ],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I8_s4_p14": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 3,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s4_p17": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 6,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s5_p00": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s5_p01": {
+   "classes": [
+    "ls -l link count"
+   ],
+   "kind": "unreachable",
+   "n_calls": 10,
+   "ok": false,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I8_s5_p08": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s5_p13": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s5_p14": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s5_p15": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s6_p02": {
+   "classes": [
+    "ls -l link count"
+   ],
+   "kind": "unreachable",
+   "n_calls": 11,
+   "ok": false,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I8_s6_p04": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s6_p06": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 2,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s6_p07": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s6_p09": {
+   "classes": [
+    "other"
+   ],
+   "kind": "unreachable",
+   "n_calls": 7,
+   "ok": false,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I8_s6_p10": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s6_p11": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s6_p12": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s6_p13": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s6_p14": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s6_p15": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s7_p03": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s7_p04": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s7_p07": {
+   "classes": [],
+   "kind": "solvable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s8_p09": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 3,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s8_p17": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 1,
+   "ok": true,
+   "strict_ok": true
+  },
+  "dsv41flash-sal-v2_baseline_I8_s9_p08": {
+   "classes": [
+    "ls -l link count"
+   ],
+   "kind": "unreachable",
+   "n_calls": 14,
+   "ok": false,
+   "strict_ok": false
+  },
+  "dsv41flash-sal-v2_baseline_I8_s9_p13": {
+   "classes": [],
+   "kind": "unreachable",
+   "n_calls": 4,
+   "ok": true,
+   "strict_ok": true
+  }
+ },
+ "generated": "2026-10-11T06:02:01Z",
+ "image": "sha256:bafc8ec7eef84467c92dc60c576732538b79553bb1d6e1b7402d37e3fe19dddf",
+ "rule": "ok = every prefix call content_equal (rab.prefix) and the /work touch succeeded; strict_ok = every call equal after normalise",
+ "seconds": 680.2,
+ "totals": {
+  "solvable": {
+   "excluded": [],
+   "n": 74,
+   "ok": 74,
+   "strict_ok": 74
+  },
+  "unreachable": {
+   "excluded": [
+    "dsv41flash-sal-v2_baseline_I15_s0_p01",
+    "dsv41flash-sal-v2_baseline_I15_s1_p03",
+    "dsv41flash-sal-v2_baseline_I15_s6_p05",
+    "dsv41flash-sal-v2_baseline_I15_s7_p02",
+    "dsv41flash-sal-v2_baseline_I15_s7_p03",
+    "dsv41flash-sal-v2_baseline_I2_s11_p10",
+    "dsv41flash-sal-v2_baseline_I2_s1_p06",
+    "dsv41flash-sal-v2_baseline_I4_s5_p09",
+    "dsv41flash-sal-v2_baseline_I8_s4_p12",
+    "dsv41flash-sal-v2_baseline_I8_s5_p01",
+    "dsv41flash-sal-v2_baseline_I8_s6_p02",
+    "dsv41flash-sal-v2_baseline_I8_s6_p09",
+    "dsv41flash-sal-v2_baseline_I8_s9_p08"
+   ],
+   "n": 109,
+   "ok": 96,
+   "strict_ok": 93
+  }
+ }
+}

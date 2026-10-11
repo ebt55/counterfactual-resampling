@@ -18,6 +18,7 @@ from rab.prefix import (
     LS_DATE_RE,
     PYTEST_TIME_RE,
     build_messages,
+    content_equal,
     continuation_budget,
     normalise,
     replay,
@@ -166,6 +167,85 @@ def test_normalise_only_touches_dates_and_timings() -> None:
     assert changed > 300
 
 
+ROOT_REC = "\n".join([
+    "total 64",
+    "drwxr-xr-x   1 root root 4096 Sep 13 17:42 .",
+    "drwxrwxrwt   1 root root 4096 Sep 13 17:40 tmp",
+    "dr-xr-xr-x 434 root root    0 Sep 13 17:42 proc",
+    "drwxr-xr-x   1 dc   dc   4096 Sep 13 17:42 work",
+])
+ROOT_REP = "\n".join([
+    "total 64",
+    "drwxr-xr-x    1 root root 4096 Oct 11 05:20 .",
+    "drwxrwxrwt    1 root root 4096 Oct 11 05:20 tmp",
+    "dr-xr-xr-x 1445 root root    0 Oct 11 05:20 proc",
+    "drwxr-xr-x    1 dc   dc   4096 Oct 11 05:20 work",
+])
+
+
+def test_normalise_proc_nlink() -> None:
+    # /proc's link count (processes in the Docker VM) and the padding it drives
+    assert normalise(ROOT_REC) == normalise(ROOT_REP)
+    assert "<nproc>" in normalise(ROOT_REC)
+    # any other link count still counts: /tmp written to (1) or pristine (2)
+    assert normalise(ROOT_REC) != normalise(ROOT_REP.replace("drwxrwxrwt    1", "drwxrwxrwt    2"))
+    assert normalise(ROOT_REC) != normalise(ROOT_REP.replace("1 dc   dc", "2 dc   dc"))
+    # only an entry named exactly `proc`
+    for name in ("proc2", "myproc", "proc -> x"):
+        assert normalise(ROOT_REC.replace(" proc", f" {name}")) != normalise(
+            ROOT_REP.replace(" proc", f" {name}")), name
+    # the rest of the proc line still counts
+    assert normalise(ROOT_REC) != normalise(ROOT_REP.replace("root    0", "root    1"))
+    assert normalise(ROOT_REC) != normalise(ROOT_REP.replace("dr-xr-xr-x", "dr-xr-xrwx"))
+    # padding is collapsed only between the permissions and the link count
+    assert normalise(ROOT_REC) != normalise(ROOT_REP.replace("root 4096", "root  4096"))
+    # a line that is not an `ls -l` line keeps its spacing
+    assert normalise("x   1 proc") != normalise("x 1 proc")
+
+
+DIAG_REC = "\n".join([
+    "[exit code 0]",
+    "# spec",
+    "---",
+    "cat: data/postprocess.md: No such file or directory",
+    "---",
+    "solution.py",
+    "",
+])
+
+
+def _move(text: str, src: int, dst: int) -> str:
+    lines = text.split("\n")
+    lines.insert(dst, lines.pop(src))
+    return "\n".join(lines)
+
+
+def test_content_equal_reorders_only_diagnostics() -> None:
+    assert content_equal(DIAG_REC, DIAG_REC)
+    # the stderr diagnostic landed elsewhere: content-equal, not strictly equal
+    moved = _move(DIAG_REC, 3, 1)
+    assert normalise(moved) != normalise(DIAG_REC)
+    assert content_equal(DIAG_REC, moved)
+    assert content_equal(DIAG_REC, _move(DIAG_REC, 3, 5))
+    # a moved non-diagnostic line is a difference
+    assert not content_equal(DIAG_REC, _move(DIAG_REC, 5, 1))
+    assert not content_equal(DIAG_REC, _move(DIAG_REC, 1, 4))
+    # a changed byte in any line is a difference, with or without the diagnostic moved
+    for i, ch in enumerate(DIAG_REC):
+        if ch == "\n":
+            continue
+        changed = DIAG_REC[:i] + ("x" if ch != "x" else "y") + DIAG_REC[i + 1:]
+        assert not content_equal(DIAG_REC, changed), i
+        assert not content_equal(DIAG_REC, _move(changed, 3, 1)), i
+    # a dropped, extra or unterminated line is a difference
+    assert not content_equal(DIAG_REC, DIAG_REC.replace("---\nsolution.py", "solution.py"))
+    assert not content_equal(DIAG_REC, DIAG_REC + "cat: x: No such file or directory\n")
+    assert not content_equal(DIAG_REC, DIAG_REC.rstrip("\n"))
+    # normalisation still applies underneath
+    diag = "ls: cannot access 'data': No such file or directory"
+    assert content_equal(LS + "\n" + diag, diag + "\n" + LS.replace("Sep 13 18:11", "Oct 11 10:42"))
+
+
 @pytest.mark.docker
 def test_fixture_replay_matches() -> None:
     from harness.sandbox import docker_available, image_available
@@ -178,8 +258,9 @@ def test_fixture_replay_matches() -> None:
     assert event["i"] >= 1
     with replay(rec, event) as res:
         assert [c.index for c in res.calls] == list(range(event["i"]))
-        assert all(c.matched for c in res.calls), [c.diff_excerpt for c in res.calls]
-        assert res.ok
+        assert all(c.matched and c.content_matched for c in res.calls), \
+            [c.diff_excerpt for c in res.calls]
+        assert res.ok and res.strict_ok
         assert res.item_key == event["item_key"]
         assert res.batch_id.startswith(event["event_id"])
         assert res.sandbox.name.startswith("rab_")
