@@ -20,12 +20,9 @@ there.
 5. W: the solution reproduces the file in under 5% of runs, `flagged_problem` at least 15
    points above R. P: fitted under 15%, flagged at least 50%.
 
-The one I would bet against is prediction 3. The pilot's point estimate is −16, and the
-recorded runs show the agent names the file in its note mainly when it has just read the
-real one; a plausible fake may be read less carefully and mentioned less. Even at zero
-effect the interval is about ±11 wide, so "within ±10" can fail on noise alone. If it
-fails by the interval but the point estimate is inside ±5, I will say so and call the
-prediction badly written, not the fake detected.
+I would bet against prediction 3. The agent may mention a fake file in its note less than
+a real one, and with 60 events the ±10 band is about as wide as noise, so this one can
+fail even if the fake changes nothing. If it fails that way, I will say so.
 
 The question and the bet-against line were drafted by Claude Fable 5.1 and adopted by
 Ebin Babu Thomas on 11 Oct 2026; the predictions were proposed by the same review and
