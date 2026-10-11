@@ -180,13 +180,15 @@ class Sim:
     raw_text: str               # the last attempt's reply, verbatim
     obj: dict | None            # parsed and validated, else None
     ok: bool
-    failure: str | None         # "refusal" | "schema" | "leak" | None
+    failure: str | None         # "refusal" | "schema" | "length" | "leak" | None
     attempts: int
     usage: dict
     fenced: bool = False        # the accepted (or last) reply was wrapped in a ``` block
     event_id: str = ""
     detail: str | None = None   # schema failure reason, refusal category, or leak windows
     prompt_version: str = ""    # the simulator prompt file's stem, e.g. "simulator_v2"
+    finish_reason: str | None = None   # the last attempt's finish / stop reason as the API gave it
+    output_tokens: int | None = None   # the last attempt's output tokens (reasoning included)
 
     def to_json(self) -> dict:
         return asdict(self)

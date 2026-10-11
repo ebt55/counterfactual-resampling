@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 from types import SimpleNamespace
 
 import httpx
@@ -232,6 +233,57 @@ def test_a_prose_reply_is_a_refusal_not_a_schema_failure(pairs):
     assert sim.detail.startswith("prose reply with no JSON")
 
 
+def test_a_reply_cut_off_by_the_cap_is_length_not_refusal(pairs):
+    ev, rec = pairs[2]
+    # GLM on I8_s11_p15: every output token spent on reasoning, empty text, finish "length"
+    empty = S._result("", "end", {"output_tokens": 16000, "reasoning_tokens": 16000}, "length", finish="length")
+    sim = S.draw(rec, ev, "SB", Scripted(empty, empty), S.SimCache(None))
+    assert (sim.ok, sim.failure, sim.attempts) == (False, "length", 2)
+    assert (sim.finish_reason, sim.output_tokens) == ("length", 16000)
+    good = S._result(_ok_text(ev, rec), "end", {"output_tokens": 900}, finish="stop")
+    recovered = S.draw(rec, ev, "SB", Scripted(empty, good), S.SimCache(None))
+    assert recovered.ok and recovered.attempts == 2
+    assert (recovered.finish_reason, recovered.output_tokens) == ("stop", 900)
+
+
+def test_truncated_json_at_the_cap_is_length(pairs):
+    ev, rec = pairs[2]
+    cut = S._result(_ok_text(ev, rec)[:40], "end", {"output_tokens": 500}, finish=None)
+    caller = Scripted(cut, cut)
+    caller.max_tokens = 500
+    sim = S.draw(rec, ev, "SA", caller, S.SimCache(None))
+    assert (sim.failure, sim.attempts, sim.output_tokens) == ("length", 2, 500)
+    sa_cut = S._result("", "end", {"output_tokens": 12}, "max_tokens", finish="max_tokens")
+    assert S.draw(rec, ev, "SA", Scripted(sa_cut, sa_cut), S.SimCache(None)).failure == "length"
+
+
+def test_concurrent_draws_of_one_prompt_call_once_and_write_one_line(pairs, tmp_path):
+    ev, rec = pairs[1]
+    gate = threading.Event()
+
+    class Slow(Scripted):
+        def __call__(self, system, user):
+            gate.wait(5)
+            return super().__call__(system, user)
+
+    caller = Slow(S._result(_ok_text(ev, rec), "end"))
+    other = Scripted(S._result(_ok_text(*pairs[2]), "end"))
+    cache = S.SimCache(tmp_path / "sims.jsonl")
+    out = []
+    threads = [threading.Thread(target=lambda: out.append(S.draw(rec, ev, "SB", caller, cache)))
+               for _ in range(8)]
+    threads.append(threading.Thread(target=lambda: out.append(S.draw(pairs[2][1], pairs[2][0], "SB", other, cache))))
+    for t in threads:
+        t.start()
+    gate.set()
+    for t in threads:
+        t.join(10)
+    assert len(out) == 9 and all(s.ok for s in out)
+    assert caller.calls == 1 and other.calls == 1
+    lines = (tmp_path / "sims.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2 and all(json.loads(x)["ok"] for x in lines)
+
+
 def test_refusal_is_recorded_after_one_retry(pairs):
     ev, rec = pairs[3]
     caller = Scripted(S._result("", "refusal", detail="cyber: declined"))
@@ -310,12 +362,18 @@ def test_sb_request_is_pinned_tool_free_and_temperature_zero(monkeypatch):
     assert body["messages"] == [{"role": "system", "content": "SYS"}, {"role": "user", "content": "USER"}]
     assert out["stop"] == "end" and out["text"] == '{"a": 1}'
     assert out["usage"]["provider"] == "Example" and out["usage"]["input_tokens"] == 9
+    assert out["finish"] == "stop"
+    assert body["max_completion_tokens"] == caller.max_tokens == 32000 == C.SIM_MAX_TOKENS["SB"]
+    assert C.SIM_MAX_TOKENS["SA"] == 16000
 
 
 def test_chat_response_refusals():
     refused = S.parse_chat_response({"choices": [{"message": {"content": ""},
                                                   "finish_reason": "content_filter"}]})
     assert refused["stop"] == "refusal"
+    cut = S.parse_chat_response({"choices": [{"message": {"content": ""}, "finish_reason": "length"}],
+                                 "usage": {"completion_tokens": 32000}})
+    assert (cut["stop"], cut["finish"], cut["usage"]["output_tokens"]) == ("end", "length", 32000)
     assert S.parse_chat_response({"choices": []})["stop"] == "error"
     assert S.parse_chat_response({"error": {"message": "flagged by moderation"}})["stop"] == "refusal"
 
@@ -340,5 +398,7 @@ def test_sa_request_shape_and_refusal():
     assert kw["system"] == "SYS" and kw["messages"] == [{"role": "user", "content": "USER"}]
     assert not {"temperature", "thinking", "tools", "fallbacks"} & set(kw)
     assert out == {"text": "{}", "stop": "end", "usage": {"input_tokens": 10, "output_tokens": 5,
-                   "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}, "detail": None}
+                   "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}, "detail": None,
+                   "finish": "end_turn"}
+    assert kw["max_tokens"] == 16000
     assert sa("SYS", "USER")["stop"] == "refusal"

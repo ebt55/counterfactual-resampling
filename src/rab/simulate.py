@@ -44,7 +44,9 @@ function name from ``from solution import <name>`` and the visible tests' litera
 arguments, each with ``expected`` 0. It never sees the real file.
 
 :func:`draw`: refusal or schema failure gets one identical retry, then a recorded
-failure (a prose reply with no JSON at all counts as a refusal); an API error raises :class:`SimulatorError` and is not cached. One attempt-set
+failure (a prose reply with no JSON at all counts as a refusal; a reply cut off by the
+output cap, ``finish_reason`` "length" / "max_tokens" or output tokens at the cap, is
+``length``); an API error raises :class:`SimulatorError` and is not cached. One attempt-set
 per ``(model, sha256(system + "\\x00" + user))``, cached in ``results/sims.jsonl``
 (:class:`SimCache`).
 
@@ -61,6 +63,7 @@ import os
 import random
 import re
 import string
+import threading
 import time
 from collections.abc import Iterable
 from pathlib import Path
@@ -442,8 +445,9 @@ def validate(text: str, stub_signature: Stub) -> dict | str:
 
 # ------------------------------------------------------------------ callers
 
-def _result(text: str, stop: str, usage: dict | None = None, detail: str | None = None) -> dict:
-    return {"text": text, "stop": stop, "usage": usage or {}, "detail": detail}
+def _result(text: str, stop: str, usage: dict | None = None, detail: str | None = None,
+            finish: str | None = None) -> dict:
+    return {"text": text, "stop": stop, "usage": usage or {}, "detail": detail, "finish": finish}
 
 
 class FakeSimulator:
@@ -489,7 +493,7 @@ class AnthropicSimulator:
     """SA: one ``messages.create`` call, system + one user message, effort low, no tools."""
 
     def __init__(self, model: str = SIM_MODELS["SA"], effort: str = SIM_EFFORT_SA,
-                 max_tokens: int = SIM_MAX_TOKENS, client=None) -> None:
+                 max_tokens: int = SIM_MAX_TOKENS["SA"], client=None) -> None:
         if client is None:
             if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
                 raise MissingKeyError("ANTHROPIC_API_KEY", "anthropic")
@@ -524,9 +528,10 @@ class AnthropicSimulator:
                  "cache_creation_input_tokens": getattr(u, "cache_creation_input_tokens", 0) or 0}
         if resp.stop_reason == "refusal":
             sd = getattr(resp, "stop_details", None)
-            return _result(text, "refusal", usage,
+            return _result(text, "refusal", usage, finish=resp.stop_reason, detail=
                            f"{getattr(sd, 'category', None)}: {getattr(sd, 'explanation', '') or ''}")
-        return _result(text, "end", usage, None if resp.stop_reason == "end_turn" else resp.stop_reason)
+        return _result(text, "end", usage, None if resp.stop_reason == "end_turn" else resp.stop_reason,
+                       finish=resp.stop_reason)
 
 
 def parse_chat_response(data: dict) -> dict:
@@ -547,21 +552,22 @@ def parse_chat_response(data: dict) -> dict:
              "reasoning_tokens": (raw.get("completion_tokens_details") or {}).get("reasoning_tokens", 0) or 0,
              "cost": raw.get("cost"), "provider": data.get("provider"), "served_model": data.get("model")}
     if msg.get("refusal") or finish == "content_filter":
-        return _result(content, "refusal", usage, f"{finish}: {str(msg.get('refusal') or '')[:300]}")
-    return _result(content, "end", usage, None if finish in (None, "stop") else str(finish))
+        return _result(content, "refusal", usage, f"{finish}: {str(msg.get('refusal') or '')[:300]}", finish=finish)
+    return _result(content, "end", usage, None if finish in (None, "stop") else str(finish), finish=finish)
 
 
 class OpenAICompatSimulator:
     """SB (OpenRouter) or its fallback (OpenAI): KM's request body, POSTed without ``tools``."""
 
     def __init__(self, preset: str, model: str, *, extra_body: dict | None = None,
-                 temperature: float = SIM_TEMPERATURE_SB, max_tokens: int = SIM_MAX_TOKENS,
+                 temperature: float = SIM_TEMPERATURE_SB, max_tokens: int = SIM_MAX_TOKENS["SB"],
                  retries: int = 3) -> None:
         from harness.providers.openai_compat import make
 
         self._p = make(preset, model, verify_model=False, temperature=temperature,
                        max_tokens=max_tokens, extra_body=dict(extra_body or {}))
         self.model = model
+        self.max_tokens = max_tokens
         self.retries = retries
 
     def request_body(self, system: str, user: str) -> dict:
@@ -611,11 +617,18 @@ def make_caller(family: str):
 # ------------------------------------------------------------------ draw and cache
 
 class SimCache:
-    """``(model, prompt_sha256) -> Sim``, persisted one JSON line per attempt-set."""
+    """``(model, prompt_sha256) -> Sim``, persisted one JSON line per attempt-set.
+
+    Safe under threads: one lock guards the in-memory index and every append, and
+    :meth:`key_lock` gives one lock per key so two workers never draw the same
+    (model, prompt) at once (the second waits and then reads the first one's row).
+    """
 
     def __init__(self, path: Path | None = SIMS_PATH) -> None:
         self.path = Path(path) if path else None
         self._rows: dict[tuple[str, str], dict] = {}
+        self._lock = threading.Lock()
+        self._key_locks: dict[tuple[str, str], threading.Lock] = {}
         if self.path and self.path.is_file():
             with open(self.path, "r", encoding="utf-8") as fh:
                 for line in fh:
@@ -623,17 +636,24 @@ class SimCache:
                         row = json.loads(line)
                         self._rows[(row["model"], row["prompt_sha256"])] = row
 
+    def key_lock(self, model: str, prompt_sha: str) -> threading.Lock:
+        with self._lock:
+            return self._key_locks.setdefault((model, prompt_sha), threading.Lock())
+
     def get(self, model: str, prompt_sha: str) -> Sim | None:
-        row = self._rows.get((model, prompt_sha))
+        with self._lock:
+            row = self._rows.get((model, prompt_sha))
         return Sim.from_json(row) if row else None
 
     def put(self, sim: Sim) -> None:
         row = sim.to_json()
-        self._rows[(sim.model, sim.prompt_sha256)] = row
-        if self.path:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.path, "a", encoding="utf-8", newline="\n") as fh:
-                fh.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
+        line = json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n"
+        with self._lock:
+            self._rows[(sim.model, sim.prompt_sha256)] = row
+            if self.path:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                with open(self.path, "a", encoding="utf-8", newline="\n") as fh:
+                    fh.write(line)
 
 
 def _add_usage(total: dict, add: dict) -> None:
@@ -663,12 +683,19 @@ def draw(rec: dict, event: Event | dict, family: str, caller, cache: SimCache) -
                    prompt_version=C.SIM_PROMPT_VERSION,
                    detail=json.dumps({"hits": hits, **verdict}, ensure_ascii=False))
     leak_log = json.dumps({"hits": hits, **verdict}, ensure_ascii=False) if hits else None
-    cached = cache.get(model, psha)
-    if cached is not None:
-        return cached
+    with cache.key_lock(model, psha):
+        cached = cache.get(model, psha)
+        if cached is not None:
+            return cached
+        return _draw_uncached(rec, ev, family, caller, cache, system, user, psha, model, leak_log)
+
+
+def _draw_uncached(rec, ev, family, caller, cache, system, user, psha, model, leak_log) -> Sim:
     stub = stub_signature(km.task_dir(ev["item_key"], ev["kind"]))
     usage: dict = {}
     raw, obj, failure, detail, fenced, attempts = "", None, None, None, False, 0
+    finish, out_tokens = None, None
+    cap = getattr(caller, "max_tokens", None)
     for _ in range(1 + SIM_RETRIES):
         attempts += 1
         res = caller(system, user)
@@ -677,6 +704,8 @@ def draw(rec: dict, event: Event | dict, family: str, caller, cache: SimCache) -
             raise SimulatorError(f"{family} {model} {ev['event_id']}: {res.get('detail')}")
         raw = res.get("text") or ""
         fenced = strip_fence(raw)[1]
+        finish = res.get("finish")
+        out_tokens = (res.get("usage") or {}).get("output_tokens")
         if res["stop"] == "refusal":
             failure, detail = "refusal", res.get("detail")
             continue
@@ -684,6 +713,10 @@ def draw(rec: dict, event: Event | dict, family: str, caller, cache: SimCache) -
         if isinstance(checked, dict):
             obj, failure, detail = checked, None, None
             break
+        if finish in ("length", "max_tokens") or (cap and out_tokens and out_tokens >= cap):
+            # the reply ran out of output tokens (often all spent on reasoning): not a refusal
+            failure, detail = "length", f"finish={finish} output_tokens={out_tokens} cap={cap}"
+            continue
         if is_prose_refusal(raw):
             failure, detail = "refusal", f"prose reply with no JSON: {raw.strip()[:200]}"
             continue
@@ -691,7 +724,8 @@ def draw(rec: dict, event: Event | dict, family: str, caller, cache: SimCache) -
     if leak_log is not None:
         detail = f"{detail + '; ' if detail else ''}leak-log: {leak_log}"
     sim = Sim(family, model, psha, raw, obj, obj is not None, failure, attempts, usage,
-              fenced=fenced, event_id=ev["event_id"], detail=detail, prompt_version=C.SIM_PROMPT_VERSION)
+              fenced=fenced, event_id=ev["event_id"], detail=detail, prompt_version=C.SIM_PROMPT_VERSION,
+              finish_reason=finish, output_tokens=out_tokens)
     cache.put(sim)
     return sim
 
