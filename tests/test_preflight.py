@@ -71,3 +71,12 @@ def test_ceiling_counts_cash_not_credit():
 def test_recorded_calls_prior_is_positive(km_root):
     prior = recorded_calls_prior(load_events())
     assert 1.0 < prior < 30.0
+
+
+def test_all_failed_calls_are_named_as_failures_not_as_cache_misses():
+    m = CostMeter(calls_per_continuation=4.0)
+    for _ in range(20):
+        m.add(*DS, {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0}, ok=False)
+    with pytest.raises(PreflightAbort, match="all of the first 20 agent calls failed") as err:
+        preflight(m)
+    assert "cache_read_input_tokens" not in str(err.value)

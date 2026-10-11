@@ -116,7 +116,51 @@ def _append(path: Path, row: dict) -> None:
 
 # ------------------------------------------------------------------ provider
 
-def make_agent_provider(worker_id: str | int, *, log_path: Path = PROVIDER_LOG):
+#: How the resumed prefix carries DeepSeek's reasoning field (see :func:`reasoning_transform`):
+#: mode -> (message field, value, which assistant messages).
+REASONING_MODES = {
+    "all_empty": ("reasoning_content", "", "all"),
+    "last_empty": ("reasoning_content", "", "last"),
+    "all_space": ("reasoning_content", " ", "all"),
+    "all_or_space": ("reasoning", " ", "all"),
+}
+REASONING_MODE = "all_space"
+
+
+def reasoning_transform(provider, mode: str = REASONING_MODE):
+    """Wrap ``provider._body`` so assistant messages carry ``reasoning_content``.
+
+    DeepSeek's API (as served through OpenRouter in Oct 2026) answers HTTP 400 "The
+    `reasoning_content` in the thinking mode must be passed back to the API" when an
+    assistant message in the history has none. KM never stored the reasoning and never
+    sent it back (``OpenAICompatProvider._to_api``), and in September the same
+    multi-turn histories were accepted, so the September runs effectively sent empty
+    reasoning. Tested on 11 Oct on ``I4_s6_p07``'s real prefix: ``"reasoning_content": ""``
+    on every assistant message is still a 400 (an empty string counts as missing);
+    ``"reasoning_content": " "`` (one space, ``all_space``, the frozen choice) is accepted,
+    thinking stays on (72 reasoning tokens) and the response carries ``message.reasoning``.
+    ``none`` leaves the body alone. KM's code is not edited: the wrapper is an instance
+    attribute on this provider.
+    """
+    if mode == "none":
+        return provider
+    original = provider._body
+
+    def body(system, messages, tools):
+        out = original(system, messages, tools)
+        assistants = [m for m in out["messages"] if m.get("role") == "assistant"]
+        field, value, which = REASONING_MODES[mode]
+        for m in (assistants if which == "all" else assistants[-1:]):
+            m.setdefault(field, value)
+        return out
+
+    provider._body = body
+    provider.rab_reasoning_mode = mode
+    return provider
+
+
+def make_agent_provider(worker_id: str | int, *, log_path: Path = PROVIDER_LOG,
+                        reasoning_mode: str = REASONING_MODE, extra: dict | None = None):
     """The pinned DeepSeek provider for one worker, with the logging hook attached."""
     from harness.providers.openai_compat import make
 
@@ -124,7 +168,8 @@ def make_agent_provider(worker_id: str | int, *, log_path: Path = PROVIDER_LOG):
         raise RuntimeError("constants.AGENT_PROVIDER_TAG / AGENT_PROVIDER_NAME are None: run --day0 first")
     provider = make("openrouter", C.AGENT_MODEL, verify_model=False, max_tokens=C.AGENT_MAX_TOKENS,
                     extra_body={"provider": {"order": [C.AGENT_PROVIDER_TAG], "allow_fallbacks": False},
-                                "usage": {"include": True}})
+                                "usage": {"include": True}, **(extra or {})})
+    reasoning_transform(provider, reasoning_mode)
     attach_hook(provider, worker_id, pin_name=C.AGENT_PROVIDER_NAME, log_path=log_path)
     return provider
 
@@ -157,6 +202,8 @@ def attach_hook(provider, worker_id: str | int, *, pin_name: str | None,
                 "run_idx": ctx["run_idx"], "call_seq": ctx["call_seq"], "status": response.status_code,
                 "id": data.get("id"), "provider": data.get("provider"), "model": data.get("model"),
                 "usage": data.get("usage"), "finish_reason": choice.get("finish_reason")}
+        if response.status_code != 200 or isinstance(data.get("error"), dict):
+            line["error"] = json.dumps(data.get("error") or data)[:800]
         ctx["lines"].append(line)
         if log_path is not None:
             _append(log_path, line)
@@ -226,9 +273,9 @@ class CostMeter:
         uncached = split_cached(provider, raw_in, cached, seat)
         return uncached / 1e6 * pin + out / 1e6 * pout + cached / 1e6 * pcached
 
-    def add(self, provider: str, model: str, usage: dict, seat: str = "agent") -> float:
+    def add(self, provider: str, model: str, usage: dict, seat: str = "agent", ok: bool = True) -> float:
         usd = self.price(provider, model, usage, seat)
-        self.calls.append({"provider": provider, "model": model, "seat": seat, "usd": usd,
+        self.calls.append({"provider": provider, "model": model, "seat": seat, "usd": usd, "ok": ok,
                            "cache_read_input_tokens": int(usage.get("cache_read_input_tokens") or 0)})
         if provider in self.CASH_PROVIDERS:
             self.cash_usd += usd
@@ -270,13 +317,17 @@ def preflight(meter: CostMeter, first_n: int = C.PREFLIGHT_FIRST_N, enabled: boo
     if not calls:
         raise ValueError("preflight needs calls_per_continuation (recorded_calls_prior)")
     projected = per_call * calls * slots
+    failed = sum(not c.get("ok", True) for c in head)
     zero_cache = all(c["cache_read_input_tokens"] == 0 for c in head)
     reasons = []
-    if zero_cache:
+    if failed == first_n:
+        # every call errored, so the cache check says nothing: name the real cause
+        reasons.append(f"all of the first {first_n} agent calls failed (API errors; see results/provider.log)")
+    elif zero_cache:
         reasons.append(f"cache_read_input_tokens is 0 on all of the first {first_n} calls")
     if projected > C.CASH_CEILING_USD:
         reasons.append(f"projected ${projected:.2f} exceeds the ${C.CASH_CEILING_USD:.0f} ceiling")
-    verdict = {"first_n": first_n, "mean_call_usd": per_call, "calls_per_continuation": calls,
+    verdict = {"first_n": first_n, "failed_calls": failed, "mean_call_usd": per_call, "calls_per_continuation": calls,
                "slots": slots, "projected_usd": projected, "zero_cache": zero_cache,
                "abort": bool(reasons) and enabled, "reasons": reasons, "enabled": enabled}
     meter.preflight_result = verdict
@@ -399,7 +450,8 @@ def resume(replay, placed: Placed, event: Event | dict, rec: dict, provider, run
             cont_turns += 1
             merge_usage(usage, turn.usage)
             if meter is not None:
-                cost += meter.add(rec_out["provider"] or "", rec_out["model"] or "", turn.usage or {})
+                cost += meter.add(rec_out["provider"] or "", rec_out["model"] or "", turn.usage or {},
+                                  ok=turn.stop_reason != "error")
                 preflight(meter, enabled=preflight_enabled)
             if turn.text:
                 final_text = turn.text

@@ -96,6 +96,33 @@ def test_request_is_pinned_without_fallbacks(monkeypatch, tmp_path):
     assert [t["function"]["name"] for t in seen["tools"]] == [t.name for t in TOOLS]
 
 
+def test_every_assistant_message_carries_a_one_space_reasoning_field(monkeypatch, tmp_path):
+    seen = {}
+
+    def handler(req):
+        seen.update(json.loads(req.content))
+        return httpx.Response(200, json=_reply("DeepSeek"))
+
+    from harness.providers.base import ToolCall
+    from rab import resume as R
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "placeholder-for-mock-transport")
+    p = R.make_agent_provider(1, log_path=tmp_path / "provider.log")
+    hooks = p._client.event_hooks["response"]
+    p._client.close()
+    p._client = httpx.Client(transport=httpx.MockTransport(handler), event_hooks={"response": hooks})
+    history = [Msg(role="user", content="u"),
+               Msg(role="assistant", content="", tool_calls=[ToolCall("c1", "bash", {"command": "ls"})]),
+               Msg(role="tool", content="out", tool_call_id="c1"),
+               Msg(role="assistant", content="ok", tool_calls=[ToolCall("c2", "bash", {"command": "ls"})]),
+               Msg(role="tool", content="out", tool_call_id="c2")]
+    p.chat("sys", history, TOOLS)
+    assistants = [m for m in seen["messages"] if m["role"] == "assistant"]
+    assert len(assistants) == 2 and all(m["reasoning_content"] == " " for m in assistants)
+    assert all("reasoning_content" not in m for m in seen["messages"] if m["role"] != "assistant")
+    assert R.REASONING_MODE == "all_space"
+
+
 def test_agent_provider_needs_day0_pin(monkeypatch):
     from rab import resume as R
 
