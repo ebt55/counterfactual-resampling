@@ -1,6 +1,17 @@
 """The run: every slot of every event, resumable (design v2 B, C, D; guide §6, §10).
 
-``python -m rab.run [--dry-run] [--events N] [--workers 4] [--pilot 5] [--root DIR]``
+``python -m rab.run [--dry-run] [--events N] [--workers 4] [--pilot 5] [--exploratory] [--root DIR]``
+
+Nothing here refuses to run: no preregistration check, no gate, no date (build plan,
+"Preregistration rule"). The proof of what was run when is the git state recorded in
+every slot file and every simulator line (:func:`git_state`: ``git rev-parse HEAD`` and
+whether tracked files differ from it).
+
+Exploratory runs (``--exploratory``, on by default with ``--pilot``): slot files carry
+``"exploratory": true`` and are named ``<arm>-<run>-x.json.gz`` beside the headline
+files. A headline run never skips a slot because an exploratory file exists, so a pilot
+event is re-run in full; ``rab.analyze`` and ``rab.discriminate`` leave exploratory
+files out unless ``--include-exploratory``.
 
 Order. Events are taken in a seeded order (:func:`event_order`), event-major: an event's
 slots all finish before the next event starts, so a stop (cost ceiling, pre-flight
@@ -46,6 +57,7 @@ import gzip
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -82,6 +94,18 @@ def _ev(event) -> dict:
     return event.to_json() if isinstance(event, Event) else dict(event)
 
 
+def git_state() -> dict:
+    """``{"git_hash": HEAD, "dirty": tracked files differ from HEAD}`` of this repo, now."""
+    def git(*args) -> str:
+        try:
+            return subprocess.run(["git", *args], cwd=str(REPO_ROOT), capture_output=True, text=True,
+                                  timeout=30, check=False).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return ""
+    head = git("rev-parse", "HEAD") or "unknown"
+    return {"git_hash": head, "dirty": bool(git("status", "--porcelain", "--untracked-files=no"))}
+
+
 def log_line(root: Path, row: dict) -> None:
     with _log_lock:
         root.mkdir(parents=True, exist_ok=True)
@@ -89,8 +113,9 @@ def log_line(root: Path, row: dict) -> None:
             fh.write(json.dumps({"t": _utc(), **row}, sort_keys=True, ensure_ascii=False) + "\n")
 
 
-def slot_path(root: Path, event_id: str, arm: str, run_idx: int) -> Path:
-    return Path(root) / "continuations" / event_id / f"{arm}-{run_idx}.json.gz"
+def slot_path(root: Path, event_id: str, arm: str, run_idx: int, exploratory: bool = False) -> Path:
+    """``<arm>-<run>.json.gz``, or ``<arm>-<run>-x.json.gz`` for an exploratory slot."""
+    return Path(root) / "continuations" / event_id / f"{arm}-{run_idx}{'-x' if exploratory else ''}.json.gz"
 
 
 def write_slot(path: Path, slot: dict) -> None:
@@ -173,7 +198,7 @@ def run_slot(ev: dict, rec: dict, arm: str, run_idx: int, *, root: Path, sim_obj
     cls = classify(cont, ev)
     t_end = time.time()
     return {"event_id": ev["event_id"], "arm": arm, "run_idx": run_idx, "kind": ev["kind"],
-            "task_id": ev["task_id"], "dry_run": dry_run, "cls": cls, "cont": cont,
+            "task_id": ev["task_id"], "dry_run": dry_run, "git": git_state(), "cls": cls, "cont": cont,
             "placed": placed.to_json(),
             "replay": {"ok": rep.ok, "strict_ok": rep.strict_ok, "batch_id": rep.batch_id,
                        "attempts": replay_attempts, "notes": rep.notes,
@@ -215,11 +240,31 @@ def run_slot_with_rerun(ev, rec, arm, run_idx, **kw) -> dict:
 
 # ------------------------------------------------------------------ simulator draws
 
-def draws_for(ev: dict, rec: dict, root: Path, dry_run: bool, callers: dict) -> dict:
-    """SA and SB draws for one event (cached); writes leak drops to ``leaks.jsonl``."""
-    from rab.simulate import SimCache, draw
+def _git_sim_cache(path: Path):
+    """``rab.simulate.SimCache`` whose new lines also carry ``git`` and ``exploratory``."""
+    from rab.simulate import SimCache
 
-    cache = SimCache(root / "sims.jsonl")
+    class GitSimCache(SimCache):
+        exploratory = False
+
+        def put(self, sim) -> None:
+            row = {**sim.to_json(), "git": git_state(), "exploratory": self.exploratory}
+            self._rows[(sim.model, sim.prompt_sha256)] = row
+            if self.path:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                with open(self.path, "a", encoding="utf-8", newline="\n") as fh:
+                    fh.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
+
+    return GitSimCache(path)
+
+
+def draws_for(ev: dict, rec: dict, root: Path, dry_run: bool, callers: dict,
+              exploratory: bool = False) -> dict:
+    """SA and SB draws for one event (cached); writes leak drops to ``leaks.jsonl``."""
+    from rab.simulate import draw
+
+    cache = _git_sim_cache(root / "sims.jsonl")
+    cache.exploratory = exploratory
     out = {}
     for family in ("SA", "SB"):
         sim = draw(rec, ev, family, callers[family], cache)
@@ -247,7 +292,8 @@ def make_callers(dry_run: bool) -> dict:
 
 # ------------------------------------------------------------------ the run
 
-def run(*, dry_run: bool, root: Path, per_kind: int | None, pilot: int | None, workers: int) -> dict:
+def run(*, dry_run: bool, root: Path, per_kind: int | None, pilot: int | None, workers: int,
+        exploratory: bool = False) -> dict:
     from rab.resume import CostMeter, dry_run_provider, event_slots, make_agent_provider, recorded_calls_prior
 
     root = Path(root)
@@ -266,20 +312,21 @@ def run(*, dry_run: bool, root: Path, per_kind: int | None, pilot: int | None, w
 
     started = time.time()
     done, skipped, dropped, stopped = 0, 0, [], None
-    print(f"[run] {len(events)} events, {workers} workers, root {root}, dry_run={dry_run}",
+    print(f"[run] {len(events)} events, {workers} workers, root {root}, dry_run={dry_run}, "
+          f"exploratory={exploratory}, git {git_state()}",
           file=sys.stderr, flush=True)
     for idx, ev in enumerate(events):
         if meter.stop_reached:
             stopped = f"cash ceiling ${C.CASH_CEILING_USD:.0f} reached before {ev['event_id']}"
             break
         slots = event_slots(ev)
-        todo = [(a, j) for a, j in slots if not slot_path(root, ev["event_id"], a, j).is_file()]
+        todo = [(a, j) for a, j in slots if not slot_path(root, ev["event_id"], a, j, exploratory).is_file()]
         skipped += len(slots) - len(todo)
         if not todo:
             continue
         rec = km.load_record(ev["run_id"], ev["position"])
         try:
-            sims = draws_for(ev, rec, root, dry_run, callers)
+            sims = draws_for(ev, rec, root, dry_run, callers, exploratory)
         except EventDrop as drop:
             dropped.append(ev["event_id"])
             log_line(root, {"event_id": ev["event_id"], "drop": drop.reason, "detail": drop.detail})
@@ -302,7 +349,8 @@ def run(*, dry_run: bool, root: Path, per_kind: int | None, pilot: int | None, w
                     drop_reason = drop_reason or drop
                     continue
                 if drop_reason is None:
-                    write_slot(slot_path(root, ev["event_id"], a, j), slot)
+                    slot["exploratory"] = exploratory
+                    write_slot(slot_path(root, ev["event_id"], a, j, exploratory), slot)
                     done += 1
         if drop_reason is not None:
             dropped.append(ev["event_id"])
@@ -312,12 +360,13 @@ def run(*, dry_run: bool, root: Path, per_kind: int | None, pilot: int | None, w
                     fh.write(json.dumps({"event_id": ev["event_id"], "kind": ev["kind"], "where": "placement",
                                          "severity": "drop", "detail": drop_reason.detail}, sort_keys=True) + "\n")
             for a, j in slots:  # a dropped event leaves every arm: no partial event stays behind
-                slot_path(root, ev["event_id"], a, j).unlink(missing_ok=True)
+                slot_path(root, ev["event_id"], a, j, exploratory).unlink(missing_ok=True)
         print(f"[run] event {idx + 1}/{len(events)} {ev['event_id']} ({ev['kind']}): {len(todo)} slots in "
               f"{time.time() - t_ev:.1f}s{' DROPPED ' + drop_reason.reason if drop_reason else ''}; "
               f"cash ${meter.cash_usd:.4f}", file=sys.stderr, flush=True)
     summary = {"events": len(events), "slots_written": done, "slots_skipped": skipped, "dropped": dropped,
-               "stopped": stopped, "seconds": round(time.time() - started, 1), "cash_usd": meter.cash_usd}
+               "stopped": stopped, "seconds": round(time.time() - started, 1), "cash_usd": meter.cash_usd,
+               "exploratory": exploratory, "git": git_state()}
     log_line(root, {"summary": summary})
     return summary
 
@@ -329,13 +378,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pilot", type=int, default=None, help="first N events overall")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--root", type=Path, default=None)
+    ap.add_argument("--exploratory", action=argparse.BooleanOptionalAction, default=None,
+                    help="label slots exploratory (files <arm>-<run>-x.json.gz); default on with --pilot")
     ap.add_argument("--n-perm", type=int, default=None, help="analysis permutations (dry run default 2,000)")
     args = ap.parse_args(argv)
     root = args.root or (DRY_ROOT if args.dry_run else RESULTS)
     if args.dry_run and Path(root).resolve() != DRY_ROOT.resolve() and DRY_ROOT.resolve() not in Path(root).resolve().parents:
         raise SystemExit("dry-run outputs go under results/dry/ only")
     per_kind = args.events if args.events is not None else (DRY_EVENTS_PER_KIND if args.dry_run else None)
-    summary = run(dry_run=args.dry_run, root=root, per_kind=per_kind, pilot=args.pilot, workers=args.workers)
+    exploratory = args.exploratory if args.exploratory is not None else bool(args.pilot)
+    summary = run(dry_run=args.dry_run, root=root, per_kind=per_kind, pilot=args.pilot, workers=args.workers,
+                  exploratory=exploratory)
     print(json.dumps(summary, sort_keys=True), file=sys.stderr)
     if args.dry_run:
         from rab import analyze

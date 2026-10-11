@@ -26,6 +26,12 @@ Statistics, per cell (solvable, unreachable), every arm against R:
 * 2×2 flagged × fitted, reread / named rates, regrade pass with Wilson intervals, the
   moderators (``notes_reveal_T``, ``fake_vs_reference``, ``fake_encodes_T``), drops, cost.
 
+Exploratory slot files (``"exploratory": true``, file names ending ``-x``: the pilot,
+prompt iteration) are excluded from ``tables.md`` by default and listed in a short
+"Exploratory runs (excluded)" section with their count and git hashes;
+``--include-exploratory`` puts them in. Nothing here depends on a preregistration or a
+date: the analysis always runs. ``tables_meta.json`` records the git state.
+
 ``--placebo`` relabels R runs 4–7 as SA (R keeps runs 0–3; the real SA runs are set
 aside) and runs everything; it should declare "moved" in about one cell in twenty.
 
@@ -89,7 +95,7 @@ def slot_files(root: Path) -> list[Path]:
                   key=lambda p: (p.parent.name, p.name))
 
 
-def run_row(slot: dict, event: dict | None) -> dict:
+def run_row(slot: dict, event: dict | None, file: str = "") -> dict:
     """One flat row per continuation: what every statistic below reads."""
     cls, cont, placed = slot.get("cls") or {}, slot.get("cont") or {}, slot.get("placed") or {}
     agreement = placed.get("fake_agreement") or {}
@@ -110,15 +116,27 @@ def run_row(slot: dict, event: dict | None) -> dict:
         "fake_vs_reference": agreement.get("vs_reference"),
         "fake_encodes_T": agreement.get("encodes_T"),
         "notes_reveal_T": bool((event or {}).get("notes_reveal_T")),
+        "exploratory": bool(slot.get("exploratory")),
+        "git_hash": (slot.get("git") or {}).get("git_hash"),
+        "file": file,
     }
 
 
 def load(root: Path, events_path: Path = EVENTS_PATH) -> tuple[list[dict], dict[str, dict]]:
-    """``(rows, events)``: one row per slot file; the events that have at least one."""
+    """``(rows, events)``: one row per slot file, exploratory ones included (flagged)."""
     events = {e["event_id"]: e for e in read_jsonl(events_path)}
-    rows = [run_row(s, events.get(s["event_id"])) for s in map(load_slot, slot_files(root))]
+    rows = []
+    for path in slot_files(root):
+        s = load_slot(path)
+        rows.append(run_row(s, events.get(s["event_id"]), path.name))
     used = {r["event_id"] for r in rows}
     return rows, {k: v for k, v in events.items() if k in used}
+
+
+def split_exploratory(rows: list[dict], include: bool) -> tuple[list[dict], list[dict]]:
+    """``(rows analysed, exploratory rows)``; exploratory rows are analysed only if ``include``."""
+    explo = [r for r in rows if r["exploratory"]]
+    return (rows if include else [r for r in rows if not r["exploratory"]]), explo
 
 
 def placebo(rows: list[dict]) -> list[dict]:
@@ -457,7 +475,8 @@ def interval(lo, hi, scale=pct) -> str:
 
 
 def render(analysis: dict, drops_: dict, cost_: dict, verdicts: dict, ctl: dict,
-           discriminator: dict | None = None, placebo_mode: bool = False, n_perm: int = N_PERM) -> str:
+           discriminator: dict | None = None, placebo_mode: bool = False, n_perm: int = N_PERM,
+           exploratory: list[dict] | None = None, include_exploratory: bool = False) -> str:
     L = ["# Tables" + (" (placebo: R runs 4-7 relabelled as SA)" if placebo_mode else ""), "",
          "Written by `python -m rab.analyze`; every number below comes from the continuation "
          "files under the analysed root. Shares in percent, errors excluded from every "
@@ -527,6 +546,12 @@ def render(analysis: dict, drops_: dict, cost_: dict, verdicts: dict, ctl: dict,
         for name, d in discriminator.items():
             L.append(f"| {name} | {d['n']} | {pct(d['acc'])} | {interval(d['lo'], d['hi'])} | {pct(d.get('surface'))} |")
         L.append("")
+    if exploratory:
+        hashes = sorted({str(r["git_hash"]) for r in exploratory})
+        L += [f"## Exploratory runs ({'included above' if include_exploratory else 'excluded'})", "",
+              f"{len(exploratory)} exploratory continuation file(s) on "
+              f"{len({r['event_id'] for r in exploratory})} event(s), produced at git "
+              + ", ".join(f"`{h}`" for h in hashes) + ".", ""]
     L += ["## Drops", "", "| what | " + " | ".join(KINDS) + " |", "|---|" + "---|" * len(KINDS)]
     for name, d in drops_.items():
         if set(d) <= set(KINDS):
@@ -562,7 +587,8 @@ def hand_read(root: Path, rows: list[dict], seed: int = SEED, n: int = HAND_READ
         rng.shuffle(pair)
         key[f"item {j}"] = {"event_id": eid, "A": f"{pair[0][0]}-{pair[0][1]}", "B": f"{pair[1][0]}-{pair[1][1]}"}
         L += [f"## Item {j}", ""]
-        slots = [load_slot(root / "continuations" / eid / f"{arm}-{idx}.json.gz") for arm, idx in pair]
+        files = {(r["arm"], r["run_idx"]): r["file"] for r in rows if r["event_id"] == eid}
+        slots = [load_slot(root / "continuations" / eid / files[(arm, idx)]) for arm, idx in pair]
         tr = slots[0]["cont"]["transcript"]
         k = slots[0]["cont"]["block_k"]
         L += ["### Prefix (last turns before the block)", ""] + [_entry(e) for e in tr[max(1, k - 4):k]]
@@ -582,26 +608,33 @@ def _entry(e: dict) -> str:
 # ------------------------------------------------------------------ main
 
 def run(root: Path, *, placebo_mode: bool = False, n_perm: int = N_PERM,
-        events_path: Path = EVENTS_PATH, recount_path: Path = RECOUNT_PATH) -> dict:
+        events_path: Path = EVENTS_PATH, recount_path: Path = RECOUNT_PATH,
+        include_exploratory: bool = False) -> dict:
+    from rab.run import git_state
+
     root = Path(root)
-    rows, events = load(root, events_path)
+    all_rows, events = load(root, events_path)
+    rows, explo = split_exploratory(all_rows, include_exploratory)
     if placebo_mode:
         rows = placebo(rows)
     analysis = analyse(rows, n_perm)
     verdicts = verdict(analysis)
     ctl = control(analysis)
     disc = None
-    disc_rows = read_jsonl(root / "discriminator.jsonl")
+    disc_rows = [r for r in read_jsonl(root / "discriminator.jsonl")
+                 if include_exploratory or not r.get("exploratory")]
     if disc_rows:
         from rab.discriminate import summarise, surface_baseline
         surface = surface_baseline(disc_rows)
         disc = {k: dict(v, surface=surface.get(k, {}).get("acc")) for k, v in summarise(disc_rows).items()}
-    text = render(analysis, drops(root, rows, recount_path), cost(root, rows), verdicts, ctl, disc, placebo_mode, n_perm)
+    text = render(analysis, drops(root, rows, recount_path), cost(root, rows), verdicts, ctl, disc, placebo_mode, n_perm,
+                  explo, include_exploratory)
     suffix = "_placebo" if placebo_mode else ""
     (root / f"tables{suffix}.md").write_text(text, encoding="utf-8", newline="\n")
     files = slot_files(root)
     meta = {"generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "root": str(root), "placebo": placebo_mode, "n_slot_files": len(files),
+            "n_exploratory": len(explo), "include_exploratory": include_exploratory, "git": git_state(),
             "n_perm": n_perm, "n_boot": N_BOOT, "seed": SEED,
             "tables_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
             "verdicts": verdicts}
@@ -622,8 +655,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--root", type=Path, default=RESULTS)
     ap.add_argument("--placebo", action="store_true")
     ap.add_argument("--n-perm", type=int, default=N_PERM)
+    ap.add_argument("--include-exploratory", action="store_true",
+                    help="analyse exploratory slot files too (default: list and exclude them)")
     args = ap.parse_args(argv)
-    run(args.root, placebo_mode=args.placebo, n_perm=args.n_perm)
+    run(args.root, placebo_mode=args.placebo, n_perm=args.n_perm,
+        include_exploratory=args.include_exploratory)
     return 0
 
 

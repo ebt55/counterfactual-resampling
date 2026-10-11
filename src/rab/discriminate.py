@@ -30,7 +30,10 @@ one task out), numpy and scipy only.
 
 Calls are cached by ``(model, prompt sha256)`` in ``results/discriminator.jsonl``; one
 JSON line per call with the comparison, event, position and score, so the scoring is
-pure over that file. :class:`FakeDiscriminator` is the keyless stand-in for the dry run.
+pure over that file; each line also records ``git`` (hash and dirty flag at the time of
+the call) and ``exploratory`` (built from exploratory slot files). Exploratory slots are
+left out unless ``--include-exploratory``. :class:`FakeDiscriminator` is the keyless
+stand-in for the dry run.
 """
 
 from __future__ import annotations
@@ -152,7 +155,8 @@ def real_pos(event_id: str, comparison: str) -> str:
     return "A" if _seed(event_id, comparison, "pos") % 2 == 0 else "B"
 
 
-def _item(cont: dict, comparison: str, obs_real: str, obs_other: str, event: dict) -> dict:
+def _item(cont: dict, comparison: str, obs_real: str, obs_other: str, event: dict,
+          exploratory: bool = False) -> dict:
     key = f"{cont['event_id']}:{comparison}"
     pos = real_pos(cont["event_id"], comparison)
     a_real, other = canonicalise_pair(obs_real, obs_other, key)
@@ -160,7 +164,7 @@ def _item(cont: dict, comparison: str, obs_real: str, obs_other: str, event: dic
             "kind": event.get("kind"), "real_pos": pos, "call": _call_text(cont),
             "prefix_tail": prefix_tail(cont["transcript"], cont["block_k"]),
             "obs_real": a_real, "obs_other": other,
-            "visible_test_text": cont.get("visible_test_text") or ""}
+            "visible_test_text": cont.get("visible_test_text") or "", "exploratory": exploratory}
 
 
 def sb_observation(obs_real: str, real_text: str, sb_text: str) -> str | None:
@@ -189,10 +193,12 @@ def build_items(slots: list[dict], events: dict[str, dict], sims: list[dict] | N
             continue
         cont = r0["cont"]
         real_obs = cont["observation"]
+        x0 = bool(r0.get("exploratory"))
         for comp in ("SA", "SSTAR", "P", "W"):
             other = runs.get((comp, 0))
             if other is not None:
-                items.append(_item(cont, comp, real_obs, other["cont"]["observation"], ev))
+                items.append(_item(cont, comp, real_obs, other["cont"]["observation"], ev,
+                                   x0 or bool(other.get("exploratory"))))
         if eid in sb:
             tdir = km.task_dir(ev.get("item_key") or cont["item_key"], ev.get("kind") or "solvable")
             real_text = real_file_text(tdir)
@@ -201,13 +207,14 @@ def build_items(slots: list[dict], events: dict[str, dict], sims: list[dict] | N
             if obs is None:
                 skipped["SB: real file not verbatim in R's observation"] += 1
             else:
-                items.append(_item(cont, "SB", real_obs, obs, ev))
+                items.append(_item(cont, "SB", real_obs, obs, ev, x0))
         if ("R", 1) in runs:
             retest_pool.append(eid)
     for eid in sorted(random.Random(_seed("retest")).sample(retest_pool, min(n_retest, len(retest_pool)))):
         runs = by_event[eid]
         items.append(_item(runs[("R", 0)]["cont"], RETEST, runs[("R", 0)]["cont"]["observation"],
-                           runs[("R", 1)]["cont"]["observation"], events.get(eid, {})))
+                           runs[("R", 1)]["cont"]["observation"], events.get(eid, {}),
+                           bool(runs[("R", 0)].get("exploratory") or runs[("R", 1)].get("exploratory"))))
     return items, dict(skipped)
 
 
@@ -283,7 +290,10 @@ def run(items: list[dict], caller, path: Path) -> list[dict]:
             if res.get("stop") == "error":
                 raise RuntimeError(f"discriminator error on {item['event_id']} {item['comparison']}: {res.get('detail')}")
             ans = parse_answer(res.get("text", ""))
+            from rab.run import git_state
+
             row = {"model": caller.model, "prompt_sha256": sha, "template_sha256": template_sha256(),
+                   "git": git_state(), "exploratory": bool(item.get("exploratory")),
                    "comparison": item["comparison"], "event_id": item["event_id"], "task_id": item["task_id"],
                    "kind": item["kind"], "real_pos": item["real_pos"], "answer_raw": res.get("text", ""),
                    "answer": ans, "score": score(ans, item["real_pos"]), "stop": res.get("stop"),
@@ -380,13 +390,19 @@ def surface_baseline(rows: list[dict]) -> dict:
 
 # ------------------------------------------------------------------ main
 
-def discriminate(root: Path, caller, events_path: Path | None = None) -> dict:
+def discriminate(root: Path, caller, events_path: Path | None = None,
+                 include_exploratory: bool = False) -> dict:
     from rab.analyze import EVENTS_PATH, load_slot, read_jsonl, slot_files
 
     root = Path(root)
     events = {e["event_id"]: e for e in read_jsonl(events_path or EVENTS_PATH)}
     slots = [load_slot(p) for p in slot_files(root)]
-    slots = [dict(s, cont=s["cont"]) for s in slots if s.get("cont")]
+    slots = [s for s in slots if s.get("cont") and (include_exploratory or not s.get("exploratory"))]
+    if include_exploratory:  # a headline file wins over an exploratory one for the same slot
+        keep = {}
+        for s in sorted(slots, key=lambda s: bool(s.get("exploratory")), reverse=True):
+            keep[(s["event_id"], s["arm"], int(s["run_idx"]))] = s
+        slots = list(keep.values())
     items, skipped = build_items(slots, events, read_jsonl(root / "sims.jsonl"))
     rows = run(items, caller, root / "discriminator.jsonl")
     return {"summary": summarise(rows), "surface": surface_baseline(rows), "skipped": skipped,
@@ -398,12 +414,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--root", type=Path, default=RESULTS)
     ap.add_argument("--dry-run", action="store_true", help="FakeDiscriminator, no key")
     ap.add_argument("--sha", action="store_true", help="print the frozen prompt's sha256 and exit")
+    ap.add_argument("--include-exploratory", action="store_true")
     args = ap.parse_args(argv)
     if args.sha:
         print(template_sha256())
         return 0
     caller = FakeDiscriminator() if args.dry_run else AnthropicDiscriminator()
-    out = discriminate(args.root, caller)
+    out = discriminate(args.root, caller, include_exploratory=args.include_exploratory)
     print(json.dumps(out, sort_keys=True, indent=1, default=float))
     return 0
 

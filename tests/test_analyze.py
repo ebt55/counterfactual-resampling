@@ -150,3 +150,31 @@ def test_tables_rebuild_byte_for_byte_and_hand_read(tmp_path):
     assert "Continuation A" in md and "## Item 5" in md
     pl = A.run(root, placebo_mode=True, n_perm=300, events_path=ev, recount_path=recount)
     assert (root / "tables_placebo.md").is_file() and set(pl["verdicts"]) == {"solvable", "unreachable"}
+
+
+def test_exploratory_files_are_listed_and_excluded_by_default(tmp_path):
+    from rab.run import git_state, slot_path
+
+    rows = _cell(n_events=3, shift=0.0)
+    root, ev = _write_root(tmp_path, rows)
+    # one exploratory pilot copy of every slot of event e00, beside the headline files
+    for r in [r for r in rows if r["event_id"] == "e00"]:
+        src = root / "continuations" / "e00" / f"{r['arm']}-{r['run_idx']}.json.gz"
+        with gzip.open(src, "rt", encoding="utf-8") as fh:
+            slot = json.load(fh)
+        slot.update(exploratory=True, git={"git_hash": "abc123", "dirty": False})
+        slot["cls"]["klass"] = "no_submit"
+        dst = slot_path(root, "e00", r["arm"], r["run_idx"], exploratory=True)
+        assert dst.name.endswith("-x.json.gz")
+        with gzip.open(dst, "wt", encoding="utf-8") as fh:
+            json.dump(slot, fh)
+    recount = tmp_path / "recount.json"
+    recount.write_text("{}", encoding="utf-8")
+    out = A.run(root, n_perm=200, events_path=ev, recount_path=recount)["text"]
+    assert "## Exploratory runs (excluded)" in out and "`abc123`" in out
+    assert "| no_submit | 0 (0.0)" in out
+    meta = json.loads((root / "tables_meta.json").read_text(encoding="utf-8"))
+    assert meta["n_exploratory"] == 16 and set(meta["git"]) == {"git_hash", "dirty"}
+    inc = A.run(root, n_perm=200, events_path=ev, recount_path=recount, include_exploratory=True)["text"]
+    assert "## Exploratory runs (included above)" in inc and "| no_submit | 0 (0.0)" not in inc
+    assert len(git_state()["git_hash"]) == 40
