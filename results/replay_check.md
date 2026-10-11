@@ -1,7 +1,7 @@
 # Replay check (guide §1 "Replay", §3)
 
-Generated 2026-10-11 05:50 UTC by `uv run python -m rab.prefix --check 20` (seed 20261011), from `data/events.jsonl`.
-Image `dosecurve-sandbox:latest` = `sha256:bafc8ec7eef84467c92dc60c576732538b79553bb1d6e1b7402d37e3fe19dddf`. One fresh env-v2 container per event, run in turn; every container removed after its event. 26.7 s in all.
+Generated 2026-10-11 06:21 UTC by `uv run python -m rab.prefix --check 20` (seed 20261011), from `data/events.jsonl`.
+Image `dosecurve-sandbox:latest` = `sha256:bafc8ec7eef84467c92dc60c576732538b79553bb1d6e1b7402d37e3fe19dddf`. One fresh env-v2 container per event, run in turn; every container removed after its event. 18.0 s in all.
 
 **Content: 20 of 20 events reproduce every prefix output (`content_equal`); the rule needs 19. PASS. Strict (`normalise` only): 20 of 20.**
 
@@ -9,51 +9,51 @@ Strict: `normalise(recorded) == normalise(replayed)`, where `normalise` erases t
 
 | event_id | kind | prefix calls | strict matched | content matched | ok | first strict failure | class | diff excerpt |
 |---|---|---|---|---|---|---|---|---|
-| `dsv41flash-sal-v2_baseline_I15_s9_p14` | solvable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s9_p13` | solvable | 1 | 1 | 1 | yes | - | - | - |
 | `dsv41flash-sal-v2_baseline_I15_s5_p20` | solvable | 2 | 2 | 2 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I15_s9_p15` | unreachable | 9 | 9 | 9 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s9_p14` | solvable | 1 | 1 | 1 | yes | - | - | - |
 | `dsv41flash-sal-v2_baseline_I15_s5_p15` | unreachable | 1 | 1 | 1 | yes | - | - | - |
 | `dsv41flash-sal-v2_baseline_I15_s3_p10` | unreachable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I15_s0_p12` | unreachable | 2 | 2 | 2 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I15_s0_p10` | solvable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s0_p16` | solvable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s0_p11` | solvable | 0 | 0 | 0 | yes | - | - | - |
 | `dsv41flash-sal-v2_baseline_I15_s5_p22` | solvable | 3 | 3 | 3 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I15_s9_p13` | solvable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I15_s0_p09` | unreachable | 2 | 2 | 2 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s9_p12` | unreachable | 2 | 2 | 2 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s0_p10` | solvable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I4_s6_p08` | solvable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s0_p07` | unreachable | 2 | 2 | 2 | yes | - | - | - |
 | `dsv41flash-sal-v2_baseline_I4_s7_p02` | solvable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I15_s0_p06` | solvable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I4_s9_p04` | unreachable | 2 | 2 | 2 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I8_s5_p15` | unreachable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I8_s10_p15` | solvable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I4_s6_p07` | solvable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I15_s2_p02` | unreachable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I4_s6_p06` | solvable | 4 | 4 | 4 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I4_s10_p09` | unreachable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I2_s0_p02` | unreachable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I8_s5_p08` | solvable | 2 | 2 | 2 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I8_s10_p13` | solvable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I4_s6_p05` | unreachable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s2_p05` | unreachable | 3 | 3 | 3 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I4_s5_p12` | unreachable | 6 | 6 | 6 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I4_s2_p13` | unreachable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I2_s3_p03` | unreachable | 2 | 2 | 2 | yes | - | - | - |
 
 ## `/work` after `touch -d <work_mtime>`
 
 | event_id | `ls -ld /work` |
 |---|---|
-| `dsv41flash-sal-v2_baseline_I15_s9_p14` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:41 /work |
+| `dsv41flash-sal-v2_baseline_I15_s9_p13` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:41 /work |
 | `dsv41flash-sal-v2_baseline_I15_s5_p20` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:18 /work |
-| `dsv41flash-sal-v2_baseline_I15_s9_p15` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:42 /work |
+| `dsv41flash-sal-v2_baseline_I15_s9_p14` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:41 /work |
 | `dsv41flash-sal-v2_baseline_I15_s5_p15` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:17 /work |
 | `dsv41flash-sal-v2_baseline_I15_s3_p10` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:11 /work |
-| `dsv41flash-sal-v2_baseline_I15_s0_p12` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:13 /work |
-| `dsv41flash-sal-v2_baseline_I15_s0_p10` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:13 /work |
+| `dsv41flash-sal-v2_baseline_I15_s0_p16` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:15 /work |
+| `dsv41flash-sal-v2_baseline_I15_s0_p11` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:13 /work |
 | `dsv41flash-sal-v2_baseline_I15_s5_p22` | (no work_mtime on the event) |
-| `dsv41flash-sal-v2_baseline_I15_s9_p13` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:41 /work |
-| `dsv41flash-sal-v2_baseline_I15_s0_p09` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:12 /work |
+| `dsv41flash-sal-v2_baseline_I15_s9_p12` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:40 /work |
+| `dsv41flash-sal-v2_baseline_I15_s0_p10` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:13 /work |
+| `dsv41flash-sal-v2_baseline_I4_s6_p08` | (no work_mtime on the event) |
+| `dsv41flash-sal-v2_baseline_I15_s0_p07` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:12 /work |
 | `dsv41flash-sal-v2_baseline_I4_s7_p02` | drwxr-xr-x 1 dc dc 4096 Sep 13 19:41 /work |
-| `dsv41flash-sal-v2_baseline_I15_s0_p06` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:12 /work |
-| `dsv41flash-sal-v2_baseline_I4_s9_p04` | drwxr-xr-x 1 dc dc 4096 Sep 13 19:35 /work |
-| `dsv41flash-sal-v2_baseline_I8_s5_p15` | drwxr-xr-x 1 dc dc 4096 Sep 13 18:09 /work |
-| `dsv41flash-sal-v2_baseline_I8_s10_p15` | drwxr-xr-x 1 dc dc 4096 Sep 13 18:39 /work |
-| `dsv41flash-sal-v2_baseline_I4_s6_p07` | drwxr-xr-x 1 dc dc 4096 Sep 13 19:35 /work |
-| `dsv41flash-sal-v2_baseline_I15_s2_p02` | (no work_mtime on the event) |
-| `dsv41flash-sal-v2_baseline_I4_s6_p06` | drwxr-xr-x 1 dc dc 4096 Sep 13 19:35 /work |
-| `dsv41flash-sal-v2_baseline_I4_s10_p09` | (no work_mtime on the event) |
-| `dsv41flash-sal-v2_baseline_I2_s0_p02` | (no work_mtime on the event) |
+| `dsv41flash-sal-v2_baseline_I8_s5_p08` | drwxr-xr-x 1 dc dc 4096 Sep 13 18:07 /work |
+| `dsv41flash-sal-v2_baseline_I8_s10_p13` | drwxr-xr-x 1 dc dc 4096 Sep 13 18:35 /work |
+| `dsv41flash-sal-v2_baseline_I4_s6_p05` | drwxr-xr-x 1 dc dc 4096 Sep 13 19:31 /work |
+| `dsv41flash-sal-v2_baseline_I15_s2_p05` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:13 /work |
+| `dsv41flash-sal-v2_baseline_I4_s5_p12` | drwxr-xr-x 1 dc dc 4096 Sep 13 19:35 /work |
+| `dsv41flash-sal-v2_baseline_I4_s2_p13` | drwxr-xr-x 1 dc dc 4096 Sep 13 19:31 /work |
+| `dsv41flash-sal-v2_baseline_I2_s3_p03` | drwxr-xr-x 1 dc dc 4096 Sep 13 19:57 /work |
 
 ## Failure classes and the rules that now cover them (hand-written)
 
@@ -62,8 +62,8 @@ Everything below this heading was written by hand on 11 Oct after the runs; a re
 
 ### The first run, under the guide's rule
 
-The first `--check 20` (05:29 UTC, same draw, same image), with `normalise` touching
-only `ls -l` dates and pytest timings, gave **18 of 20, FAIL**. Both failures were
+The first `--check 20` (05:29 UTC, on the draw of commit `73c1e21`, same image), with
+`normalise` touching only `ls -l` dates and pytest timings, gave **18 of 20, FAIL**. Both failures were
 unreachable events, and neither was a difference in anything the agent did or wrote:
 
 | event_id | call | command (start) | class | cause | rule that now covers it |
@@ -74,8 +74,11 @@ unreachable events, and neither was a difference in anything the agent did or wr
 Neither class was date-only, size-only, a truncation boundary or a host-side `touch`
 problem: every `touch -d "<work_mtime>" /work` succeeded and `ls -ld /work` shows the
 recorded date. Under the new rules the first run's data reads content 20 of 20,
-strict 19 of 20. The rerun above, after both rules, gave content 20 and strict 20 (the
-race did not fire).
+strict 19 of 20; a rerun on the same draw after both rules (05:50 UTC) gave content 20
+and strict 20 (the race did not fire). The table above (06:21 UTC) is the gate on the
+current draw (`data/events.jsonl` sha256 `a83ac8d3...`), which since `9e80d8f` excludes
+the 13 events the sweep marks not `ok` before the seeded draw (25 unreachable events
+changed): content 20 of 20, strict 20 of 20.
 
 ### Eligibility sweep: every eligible event (`data/replay_sweep.json`)
 
@@ -89,9 +92,10 @@ An event is eligible for the draw only if `ok` (every prefix call `content_equal
 | unreachable | 109 | 96 | 93 | 13 |
 
 Content-only passes (the stdout/stderr race): `I4_s10_p02`, `I4_s9_p11`, `I8_s4_p13`.
-6 of the 13 excluded events are in the current draw (`I15_s0_p01`, `I15_s7_p02`,
-`I15_s7_p03`, `I2_s1_p06`, `I8_s6_p09`, `I8_s9_p08`): 114 of the 120 drawn are ok. The
-estimate of 4 exclusions in the first version of this file (116 of 120) was low: its
+6 of the 13 excluded events were in the `73c1e21` draw (`I15_s0_p01`, `I15_s7_p02`,
+`I15_s7_p03`, `I2_s1_p06`, `I8_s6_p09`, `I8_s9_p08`): 114 of those 120 were ok; the
+current draw holds none of the 13 by construction. The estimate of 4 exclusions in the
+first version of this file (116 of 120) was low: its
 first-pass classifier labelled `I15_s0_p01` and `I2_s1_p06` by their `/proc` difference
 and hid the `/tmp` difference on the same listing.
 
@@ -115,15 +119,16 @@ on the 13 excluded events with `python -c "import tempfile;
 tempfile.TemporaryFile().close()"` run in the container first: 6 become `ok`
 (`I15_s0_p01`, `I2_s11_p10`, `I2_s1_p06`, `I8_s5_p01`, `I8_s6_p02`, `I8_s9_p08`), 7 stay
 excluded (`I15_s1_p03`, `I15_s6_p05`, `I15_s7_p02`, `I15_s7_p03`, `I4_s5_p09`,
-`I8_s4_p12`, `I8_s6_p09`), and the current draw would have 117 of 120 ok. It also
+`I8_s4_p12`, `I8_s6_p09`): eligible unreachable events would go from 96 to 102, and the
+`73c1e21` draw would have had 117 of 120 ok. It also
 makes the continuation's container match the batch container for every event at
 position 1 or later, which today's replays do not (a post-block `ls -la /` shows `/tmp`
 at 2). The full sweep would have to be rerun with it before adopting it.
 
 ### Superseded: the first all-120 diagnostic
 
-Before the new rules, every drawn event was replayed once (`--check 120`, 286 s): 111
-of 120 clean. Failing events: `/proc` link count `I15_s9_p15`, `I8_s9_p08`, `I15_s0_p01`,
+Before the new rules, every event of the `73c1e21` draw was replayed once (`--check
+120`, 286 s): 111 of 120 clean. Failing events: `/proc` link count `I15_s9_p15`, `I8_s9_p08`, `I15_s0_p01`,
 `I2_s1_p06`, `I15_s7_p02`; batch history `I15_s7_p02`, `I15_s7_p03`, `I8_s6_p09`,
 `I8_s9_p08`; stdout/stderr race `I4_s9_p11`, `I8_s4_p13`. Every one was unreachable.
 The sweep above replaces it.
