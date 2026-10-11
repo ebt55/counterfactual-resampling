@@ -114,7 +114,7 @@ def _d0_report(o: dict) -> str:
     ac, cc = o.get("agent_call"), o.get("credit_call")
     lines = [
         "# Day-0 keyed checks (guide §1 \"Served\" and \"Credit\")", "",
-        f"Run {o['date']} by `uv run python -m rab.resume --day0`. Full endpoint lists are the "
+        f"Run {o['date']} by `uv run python tools/day0.py`. Full endpoint lists are the "
         "`kind: endpoints` lines of `results/provider.log`; prices are USD per million tokens "
         "from the OpenRouter endpoints API.", "",
         "| Seat | Model | Endpoint (provider_name) | Routing tag (`provider.order`) | Input | Output | Cache read |",
