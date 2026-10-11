@@ -24,10 +24,6 @@ I would bet against prediction 3. The agent may mention a fake file in its note 
 a real one, and with 60 events the ±10 band is about as wide as noise, so this one can
 fail even if the fake changes nothing. If it fails that way, I will say so.
 
-The question and the bet-against line were drafted by Claude Fable 5.1 and adopted by
-Ebin Babu Thomas on 11 Oct 2026; the predictions were proposed by the same review and
-accepted unchanged.
-
 ## The null
 
 A simulated answer file at the first read does not move what this agent does next beyond
