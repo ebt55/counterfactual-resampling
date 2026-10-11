@@ -190,6 +190,28 @@ Where a decision departs from the guide, PREREG lists the departure.
     paragraph (OpenAI July 2026, Kissane/MacDiarmid/Roger, EnvSimBench,
     Ctrl-Z), and the three reproduce commands. Gates, dates, emails, phases
     and Ebin's rows stay out of the README. Dry-run tables are never committed.
+17. **Replay rules (B, A, C, D; decided 11 Oct after the D0 replay check).**
+    The strict check gave 18 of 20 (gate 19) and a diagnostic sweep gave 111 of
+    120; every failure was container nondeterminism, none an agent action
+    (`results/replay_check.md`). Three rules, each a PREREG departure from the
+    guide's "touches only `ls -l` dates and pytest timings":
+    (a) `normalise` also replaces the link count of an `ls -l` line named `proc`
+    with a token and collapses the padding before the link count to one space
+    (procfs reports the Docker VM's process count there);
+    (b) `content_equal` counts a call as reproduced when the normalised texts
+    hold the same multiset of lines and every moved line is a `prog: message`
+    diagnostic (a `docker exec` stdout/stderr race); strict counts are reported
+    beside it; `content_equal` is also the R-arm blocked-call check and the
+    main-run divergence rule (item 6);
+    (c) eligibility (guide §2) gains "the prefix replays clean in a fresh env-v2
+    container under (a) and (b)"; `python -m rab.prefix --sweep` writes
+    `data/replay_sweep.json` over all 183 eligible events, `select.py` excludes
+    the failures before the seeded draw and reports them per kind (expected: 4
+    unreachable, whose prefix read files that earlier items of the same KM batch
+    had left in `/tmp`). Side finding for KM, not this repo: env v2 leaves a
+    memory channel through `/tmp` across items of one batch.
+    Also recorded: the rebuilt image runs Python 3.12.15 against 3.12.14 in the
+    September records; no event prefix prints the version.
 
 ## Interfaces (frozen; `src/rab/types.py`, created by chunk C, used by D and E1)
 
@@ -200,7 +222,7 @@ class Event:            # one row of data/events.jsonl (chunk A's fields, verbat
 
 @dataclass
 class CallDiff:
-    index: int; tool: str; matched: bool; diff_excerpt: str
+    index: int; tool: str; matched: bool; content_matched: bool; diff_excerpt: str
 
 @dataclass
 class Replay:           # chunk B
