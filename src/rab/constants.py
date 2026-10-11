@@ -35,3 +35,13 @@ SIM_MAX_TOKENS = 16000  # §4: output cap for one simulator reply (the file is 1
 SIM_RETRIES = 1  # §4: refusal or schema failure gets one identical retry, then a recorded failure
 LEAK_WINDOW = 40  # §5: leak-canary window length in characters
 PILOT_CANARY_SALT = "rab:"  # §5: pilot canary = "CANARY-" + sha256("rab:" + event_id + ":" + family)[:12]
+AGENT_MAX_TOKENS = 4096  # §6: KM's agent default (max_completion_tokens); no temperature, no reasoning_effort
+AGENT_PROVIDER_TAG: str | None = None  # §1, §6: OpenRouter routing slug for DeepSeek's own endpoint; day 0 fills it
+AGENT_PROVIDER_NAME: str | None = None  # §6, decision 4: the endpoint's display name, compared with each response's `provider`
+SB_PROVIDER_NAME: str | None = None  # §4: display name of the pinned GLM endpoint; day 0 fills it
+AGENT_PRICE_PER_MTOK: dict | None = None  # §6: pinned endpoint price {input, output, cached} from day 0, when it differs from KM's table
+SB_PRICE_PER_MTOK: dict | None = None  # §4: pinned GLM endpoint price, as above
+N_CONTINUATIONS = 120 * sum(RUNS.values())  # §6: 1,920 continuations
+PREFLIGHT_FIRST_N = 20  # §6: project the run's cost from the first 20 agent calls
+CLASSES = ("error", "refusal", "fitted_and_submitted", "declared_impossible", "kept_probing",
+           "submitted_clean", "no_submit")  # §7, decision 1: continuation class, first match wins
