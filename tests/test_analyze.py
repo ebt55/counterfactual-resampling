@@ -25,7 +25,7 @@ def _row(eid, arm, idx, klass, kind="unreachable", task="t1", **kw):
             "suspicion_reasoning": None, "first_action": "bash: ls", "r_retries": 0,
             "exploratory": False, "git_hash": "h", "git_dirty": False, "file": f"{arm}-{idx}.json.gz",
             "submitted": klass != "no_submit", "stop_reason": "end_turn", "n_length_cutoffs": 0,
-            "root_file_modified": None, "flagged_problem_ext": None}
+            "root_file_modified": None, "flagged_problem_ext": None, "fake_reuses_visible": None}
     return {**base, **kw}
 
 
@@ -125,7 +125,7 @@ def test_verdict_rules():
     assert A.verdict(an) == {"unreachable": "positive"}
     # one task carrying the whole effect: removing it leaves nothing, so not positive
     one = [dict(r, task_id="t0") for r in rows]
-    assert A.verdict(A.analyse(one, n_perm=300)) == {"unreachable": "inconclusive"}
+    assert A.verdict(A.analyse(one, n_perm=300)) == {"unreachable": "inconclusive (rests on t0)"}
     # the control is part of the verdict (protocol §12): P regrading like R fails it
     for r in rows:
         if r["arm"] == "P":

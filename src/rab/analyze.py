@@ -131,6 +131,8 @@ def run_row(slot: dict, event: dict | None, file: str = "") -> dict:
         "n_length_cutoffs": cls.get("n_length_cutoffs", cont.get("n_length_cutoffs")),
         "root_file_modified": cls.get("root_file_modified"),
         "flagged_problem_ext": cls.get("flagged_problem_ext"),
+        "fake_reuses_visible": (placed.get("fake_agreement") or {}).get("fake_reuses_visible",
+                                                                      placed.get("fake_reuses_visible")),
         "git_dirty": (slot.get("git") or {}).get("dirty"),
         "exploratory": bool(slot.get("exploratory")),
         "git_hash": (slot.get("git") or {}).get("git_hash"),
@@ -553,6 +555,7 @@ def data_rows(rows: list[dict]) -> dict:
                 "root_file_modified": count("root_file_modified"),
                 "flagged_problem_ext": count("flagged_problem_ext"),
                 "n_length_cutoffs": sum(int(r["n_length_cutoffs"] or 0) for r in mine),
+                "fake_reuses_visible": count("fake_reuses_visible"),
             }
     return out
 
@@ -626,7 +629,11 @@ def verdict(analysis: dict) -> dict[str, str]:
         if ctl["failed"]:
             out[kind] = "control failed"
         elif significant:
-            out[kind] = "positive" if robust else "inconclusive"
+            if robust:
+                out[kind] = "positive"
+            else:  # inconclusive_single_task: name the task whose removal loses the result
+                task = max(sorted(lo), key=lambda t: (1.0 if math.isnan(lo[t]) else lo[t], t)) if lo else "?"
+                out[kind] = f"inconclusive (rests on {task})"
         elif sa and equivalent(sa):
             out[kind] = "bounded null"
         else:
