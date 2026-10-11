@@ -162,6 +162,7 @@ class Placed:
     obs_matches_strict: bool | None = None      # R only; normalise() equality, reported beside
     file_obj: dict | None = None                # the parsed file on disk after placement (None for B)
     build: dict | None = None                   # what the arm's builder recorded (share_changed, dropped cases)
+    leak_severity: str | None = None            # rab.simulate.leak_verdict: "drop" | "log" | None
 
     def to_json(self) -> dict:
         return asdict(self)

@@ -42,7 +42,9 @@ blocked call through ``harness.agent.ToolExecutor`` with the record's limits (de
 raised (decision 6 re-runs). For a fake arm, a live observation truncated where the
 recording was not raises :class:`PlacementError`. ``leak_hits`` (fake arms) is the §5
 canary over the live observation against the fake, ``spec_text``,
-``visible_test_text`` and the prefix.
+``visible_test_text`` and the prefix; ``leak_severity`` is
+``rab.simulate.leak_verdict`` (design v2 C: ``drop`` only on the real canary or an
+``expected`` literal of 8+ characters absent from every allowed text, else ``log``).
 
 :func:`fake_agreement` (decision 9, design v2 C): ``vs_reference`` (share of cases with
 ``expected == reference(args)``), ``encodes_T`` (share with ``expected ==
@@ -73,7 +75,7 @@ from rab.constants import (
     SEED,
 )
 from rab.select import monitor_denies
-from rab.simulate import leak_hits, prefix_texts, real_file_text, stub_signature, validate
+from rab.simulate import leak_hits, leak_verdict, prefix_texts, real_file_text, stub_signature, validate
 from rab.types import Event, Placed
 from harness.agent import ToolExecutor
 
@@ -377,11 +379,12 @@ def place(sandbox, item_key: str, task_dir: Path, rec: dict, event: Event | dict
     obj = json.loads(file_text)
     agreement = fake_agreement(task_dir, obj, ev["kind"])
     fake_size = len(file_text.encode("utf-8"))
-    hits = leak_hits(observation, real_text,
-                     [file_text, rec["spec_text"], rec["visible_test_text"], *prefix_texts(rec, k)])
+    allowed = [file_text, rec["spec_text"], rec["visible_test_text"], *prefix_texts(rec, k)]
+    hits = leak_hits(observation, real_text, allowed)
     return Placed(arm, observation, truncated, None, snapshot_before, canaries, expected_values,
                   real_size, fake_size, fake_size == real_size, agreement["vs_reference"], hits,
-                  fake_agreement=agreement, checks=checks, file_obj=on_disk, build=build)
+                  fake_agreement=agreement, checks=checks, file_obj=on_disk, build=build,
+                  leak_severity=leak_verdict(hits, real_text, allowed)["severity"])
 
 
 # ------------------------------------------------------------------ fake correctness

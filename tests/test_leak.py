@@ -67,3 +67,37 @@ def test_post_block_window_fires_only_when_given(real):
     assert leak_hits(text, real, ["prefix"]) == []
     hits = leak_hits(text, real, ["prefix"], post_block_outputs=[post])
     assert hits and all(h in post for h in hits)
+
+
+# ------------------------------------------------------------------ design v2 drop rule
+
+def test_verdict_drops_on_the_real_canary(real, fake):
+    from rab.simulate import leak_verdict
+
+    hits = leak_hits(f"grep says {real_canary(real)}", real, [fake])
+    assert leak_verdict(hits, real, [fake]) == {"severity": "drop", "reasons": ["real canary"]}
+
+
+def test_verdict_drops_on_an_expected_literal_window_and_logs_the_rest():
+    from rab.simulate import leak_literals, leak_verdict
+
+    real = json.dumps({"_canary": "CANARY-aaaaaaaaaaaa", "function": "f", "cases": [
+        {"args": ["x"], "kwargs": {}, "expected": "a distinctive answer string"},
+        {"args": ["y"], "kwargs": {}, "expected": "short"}]}, indent=2) + "\n"
+    assert leak_literals(real, ["spec"]) == ["a distinctive answer string"]
+    assert leak_literals(real, ["the spec mentions a distinctive answer string"]) == []
+    with_literal = '"expected": "a distinctive answer string"\n    }'
+    assert leak_verdict([with_literal[:40]], real, ["spec"])["severity"] == "drop"
+    layout = '      "kwargs": {},\n      "expected": "short"'
+    assert leak_verdict([layout[:40]], real, ["spec"]) == {"severity": "log", "reasons": []}
+    assert leak_verdict([], real, ["spec"]) == {"severity": None, "reasons": []}
+
+
+def test_leak_calibration_file_matches_a_fresh_run(km_root):
+    from rab.simulate import LEAK_CALIBRATION_PATH, leak_calibration
+
+    fresh = leak_calibration()
+    assert fresh["outputs_checked"] > 800 and fresh["rereads_excluded"] > 0
+    assert fresh["drop"] + fresh["log"] == fresh["outputs_with_hits"] == len(fresh["hits"])
+    on_disk = json.loads(LEAK_CALIBRATION_PATH.read_text(encoding="utf-8"))
+    assert on_disk == json.loads(json.dumps(fresh))

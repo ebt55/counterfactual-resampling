@@ -286,6 +286,47 @@ def leak_hits(text: str, real_file: str, allowed_texts: Iterable[str],
 _SEP = "\x00\x1f\x00"
 
 
+PROMPT_MISMATCH = "prompt is not the template filled with prompt_parts"
+
+
+def leak_literals(real_file: str, allowed_texts: Iterable[str]) -> list[str]:
+    """The real file's ``expected`` literals of 8+ characters that no allowed text holds.
+
+    KM ``detectors.detect.expected_literals`` semantics (strings verbatim; lists and
+    dicts as ``json.dumps`` and ``repr``), then every literal found in an allowed text
+    is removed.
+    """
+    from detectors.detect import expected_literals
+
+    values = [c.get("expected") for c in json.loads(real_file).get("cases", [])]
+    allowed = list(allowed_texts)
+    return [lit for lit in expected_literals({"expected_values": values, "spec_text": "", "visible_test_text": ""})
+            if not any(lit in a for a in allowed)]
+
+
+def leak_verdict(hits: list[str], real_file: str, allowed_texts: Iterable[str]) -> dict:
+    """Design v2 C drop rule over :func:`leak_hits` output.
+
+    ``severity`` is ``"drop"`` when a hit is the real canary, a window containing an
+    ``expected`` literal of 8+ characters absent from every allowed text, or a prompt
+    that is not the template filled with its parts; ``"log"`` for any other hit; None
+    without hits. Only ``drop`` removes an event (``results/leaks.jsonl`` keeps both).
+    """
+    if not hits:
+        return {"severity": None, "reasons": []}
+    canary = real_canary(real_file)
+    literals = leak_literals(real_file, allowed_texts)
+    reasons = []
+    for h in hits:
+        if h == canary:
+            reasons.append("real canary")
+        elif h == PROMPT_MISMATCH:
+            reasons.append(PROMPT_MISMATCH)
+        else:
+            reasons += [f"expected literal {lit!r}" for lit in literals if lit in h]
+    return {"severity": "drop" if reasons else "log", "reasons": sorted(set(reasons))}
+
+
 def prompt_leak_hits(rec: dict, event: Event | dict, system: str, user: str) -> list[str]:
     """§5 over a simulator prompt: the real file and every ``tool_calls[i:]`` output.
 
@@ -305,7 +346,7 @@ def prompt_leak_hits(rec: dict, event: Event | dict, system: str, user: str) -> 
     canary = real_canary(real)
     hits = [canary] if canary and canary in system + "\n" + user else []
     if (system, user) != build_prompt(rec, ev):
-        hits.append("prompt is not the template filled with prompt_parts")
+        hits.append(PROMPT_MISMATCH)
     allowed = allowed_sources(rec, ev)
     for piece in prompt_pieces(rec, ev):
         hits.extend(h for h in leak_hits(piece, real, allowed, post) if h not in hits)
@@ -615,9 +656,12 @@ def draw(rec: dict, event: Event | dict, family: str, caller, cache: SimCache) -
     psha = prompt_sha256(system, user)
     model = caller.model
     hits = prompt_leak_hits(rec, ev, system, user)
-    if hits:
-        return Sim(family, model, psha, "", None, False, "leak", 0, {},
-                   event_id=ev["event_id"], detail=json.dumps(hits, ensure_ascii=False))
+    verdict = leak_verdict(hits, real_file_text(km.task_dir(ev["item_key"], ev["kind"])),
+                           allowed_sources(rec, ev))
+    if verdict["severity"] == "drop":
+        return Sim(family, model, psha, "", None, False, "leak", 0, {}, event_id=ev["event_id"],
+                   detail=json.dumps({"hits": hits, **verdict}, ensure_ascii=False))
+    leak_log = json.dumps({"hits": hits, **verdict}, ensure_ascii=False) if hits else None
     cached = cache.get(model, psha)
     if cached is not None:
         return cached
@@ -640,7 +684,89 @@ def draw(rec: dict, event: Event | dict, family: str, caller, cache: SimCache) -
             obj, failure, detail = checked, None, None
             break
         failure, detail = "schema", checked
+    if leak_log is not None:
+        detail = f"{detail + '; ' if detail else ''}leak-log: {leak_log}"
     sim = Sim(family, model, psha, raw, obj, obj is not None, failure, attempts, usage,
               fenced=fenced, event_id=ev["event_id"], detail=detail)
     cache.put(sim)
     return sim
+
+
+# ------------------------------------------------------------------ calibration (design v2 C, F)
+
+LEAK_CALIBRATION_PATH = REPO_ROOT / "data" / "leak_calibration.json"
+
+
+def leak_calibration(records=None) -> dict:
+    """``leak_hits`` over every recorded post-block output of the 187 found events.
+
+    Post-block outputs are ``tool_calls[i+1:]``; outputs that contain the real
+    answer-file canary (re-reads of the file) are excluded. Allowed texts are what an R
+    continuation is allowed to reproduce: ``spec_text``, ``visible_test_text`` and the
+    prefix (``transcript[1:k]``); the observation of the read itself is not allowed,
+    so this counts how often an unprompted agent re-types answer-file content.
+    """
+    from rab import select as sel
+
+    found, _ = sel.scan(km.iter_line_records() if records is None else records)
+    rows, n_outputs, n_rereads = [], 0, 0
+    by_kind: dict = {}
+    for f in found:
+        ev = f["event"]
+        if ev["kind"] == "contradict":
+            continue
+        rec = km.load_record(ev["run_id"], ev["position"])
+        real = real_file_text(km.task_dir(ev["item_key"], ev["kind"]))
+        canary = real_canary(real)
+        allowed = [rec["spec_text"], rec["visible_test_text"], *prefix_texts(rec, ev["k"])]
+        tally = by_kind.setdefault(ev["kind"], {"events": 0, "outputs": 0, "rereads_excluded": 0,
+                                                "outputs_with_hits": 0, "events_with_hits": 0,
+                                                "drop": 0, "log": 0})
+        tally["events"] += 1
+        event_hit = False
+        for j, call in enumerate(rec["tool_calls"][ev["i"] + 1:], start=ev["i"] + 1):
+            out = call.get("output") or ""
+            if canary and canary in out:
+                n_rereads += 1
+                tally["rereads_excluded"] += 1
+                continue
+            n_outputs += 1
+            tally["outputs"] += 1
+            hits = leak_hits(out, real, allowed)
+            if not hits:
+                continue
+            verdict = leak_verdict(hits, real, allowed)
+            event_hit = True
+            tally["outputs_with_hits"] += 1
+            tally[verdict["severity"]] += 1
+            rows.append({"event_id": ev["event_id"], "kind": ev["kind"], "call": j, "tool": call.get("tool"),
+                         "n_hits": len(hits), "first_hit": hits[0], **verdict})
+        tally["events_with_hits"] += event_hit
+    return {"rule": "leak_hits(output, real file, [spec, visible tests, prefix]) over tool_calls[i+1:] "
+                    "of the 187 found solvable and unreachable events, outputs holding the real canary "
+                    "excluded; severity by leak_verdict (design v2 C)",
+            "outputs_checked": n_outputs, "rereads_excluded": n_rereads,
+            "outputs_with_hits": len(rows), "drop": sum(r["severity"] == "drop" for r in rows),
+            "log": sum(r["severity"] == "log" for r in rows), "by_kind": by_kind, "hits": rows}
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    import sys
+
+    p = argparse.ArgumentParser(prog="rab.simulate", description=__doc__.splitlines()[0])
+    p.add_argument("--leak-calibration", action="store_true",
+                   help="leak_hits over the recorded post-block outputs; writes data/leak_calibration.json")
+    args = p.parse_args(argv)
+    if not args.leak_calibration:
+        p.print_help()
+        return 2
+    out = leak_calibration()
+    LEAK_CALIBRATION_PATH.write_bytes((json.dumps(out, sort_keys=True, ensure_ascii=False, indent=1)
+                                       + chr(10)).encode("utf-8"))
+    print(json.dumps({k: v for k, v in out.items() if k != "hits"}, indent=1), file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

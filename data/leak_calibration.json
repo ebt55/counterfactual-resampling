@@ -1,0 +1,29 @@
+{
+ "by_kind": {
+  "solvable": {
+   "drop": 0,
+   "events": 76,
+   "events_with_hits": 0,
+   "log": 0,
+   "outputs": 254,
+   "outputs_with_hits": 0,
+   "rereads_excluded": 1
+  },
+  "unreachable": {
+   "drop": 0,
+   "events": 111,
+   "events_with_hits": 0,
+   "log": 0,
+   "outputs": 623,
+   "outputs_with_hits": 0,
+   "rereads_excluded": 13
+  }
+ },
+ "drop": 0,
+ "hits": [],
+ "log": 0,
+ "outputs_checked": 877,
+ "outputs_with_hits": 0,
+ "rereads_excluded": 14,
+ "rule": "leak_hits(output, real file, [spec, visible tests, prefix]) over tool_calls[i+1:] of the 187 found solvable and unreachable events, outputs holding the real canary excluded; severity by leak_verdict (design v2 C)"
+}

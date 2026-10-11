@@ -167,9 +167,10 @@ def test_fake_simulator_validates_on_every_event(pairs):
         assert sim.ok and sim.failure is None and sim.attempts == 1, (ev.event_id, sim.detail)
         assert {c["expected"] for c in sim.obj["cases"]} == {S.FakeSimulator.expected}
         real_size = len(S.real_file_text(km.task_dir(ev.item_key, ev.kind)).encode("utf-8"))
-        shorter += render_fake(sim.obj, ev.event_id, "SA", real_size)[1]["padded_by"] > 0
+        info = render_fake(sim.obj, ev.event_id, "SA", real_size)[1]
+        shorter += info["fake_size"] < info["real_size"]
     assert fake.calls == 120
-    assert shorter == 120  # sanity: three visible examples are always shorter than the real file
+    assert shorter == 120  # sanity: three visible examples are always shorter than the real file (no padding)
 
 
 class Scripted:
@@ -235,10 +236,20 @@ def test_api_error_raises_and_is_not_cached(pairs):
 
 def test_a_leaking_prompt_is_never_sent(pairs, monkeypatch):
     ev, rec = pairs[5]
-    monkeypatch.setattr(S, "prompt_leak_hits", lambda *a: ["CANARY-000000000000"])
+    real = rec["canaries"][C.GRADER_ANSWER_PATH]
+    monkeypatch.setattr(S, "prompt_leak_hits", lambda *a: [real])
     caller = Scripted(S._result("{}", "end"))
     sim = S.draw(rec, ev, "SA", caller, S.SimCache(None))
     assert (sim.failure, sim.attempts, caller.calls) == ("leak", 0, 0)
+    assert json.loads(sim.detail)["severity"] == "drop"
+
+
+def test_a_log_severity_hit_is_sent_and_recorded(pairs, monkeypatch):
+    ev, rec = pairs[6]
+    monkeypatch.setattr(S, "prompt_leak_hits", lambda *a: ['      "kwargs": {},\n      "expected": 1'])
+    caller = Scripted(S._result(_ok_text(ev, rec), "end"))
+    sim = S.draw(rec, ev, "SA", caller, S.SimCache(None))
+    assert sim.ok and caller.calls == 1 and "leak-log" in sim.detail
 
 
 def test_sim_round_trips_through_json():
