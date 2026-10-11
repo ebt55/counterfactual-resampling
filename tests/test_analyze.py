@@ -20,7 +20,10 @@ def _row(eid, arm, idx, klass, kind="unreachable", task="t1", **kw):
             "flagged": klass == "flagged_problem", "fitted": klass == "fitted_and_submitted",
             "reread": False, "named": False, "regrade_pass": False, "size_visible": False,
             "error_class": None, "provider_mismatch": False, "cost_usd": 0.001, "wall_s": 1.0,
-            "fake_vs_reference": None, "fake_encodes_T": None, "notes_reveal_T": False}
+            "fake_vs_reference": None, "fake_encodes_T": None, "notes_reveal_T": False,
+            "note_names_file": False, "solution_kind": "spec", "suspicion_content": False,
+            "suspicion_reasoning": None, "first_action": "bash: ls", "r_retries": 0,
+            "exploratory": False, "git_hash": "h", "file": f"{arm}-{idx}.json.gz"}
     return {**base, **kw}
 
 
@@ -178,3 +181,44 @@ def test_exploratory_files_are_listed_and_excluded_by_default(tmp_path):
     inc = A.run(root, n_perm=200, events_path=ev, recount_path=recount, include_exploratory=True)["text"]
     assert "## Exploratory runs (included above)" in inc and "| no_submit | 0 (0.0)" not in inc
     assert len(git_state()["git_hash"]) == 40
+
+
+def test_rate_diff_and_regrade_strata():
+    rows = []
+    for e in range(10):
+        for arm, n in (("R", 8), ("SA", 4)):
+            for i in range(n):
+                rows.append(_row(f"e{e}", arm, i, "submitted_clean", kind="solvable",
+                                 note_names_file=(arm == "SA"), regrade_pass=(arm == "R"),
+                                 notes_reveal_T=(e % 2 == 0)))
+    d = A.rate_diff(rows, "SA", "R", lambda r: r["note_names_file"])
+    assert d["diff"] == pytest.approx(1.0) and not d["within10"] and d["arm_n"] == 40
+    same = A.rate_diff(rows, "R", "R", lambda r: r["regrade_pass"])
+    assert same["diff"] == 0.0 and same["within10"]
+    st = A.regrade_strata(rows)
+    assert st["notes_reveal_T=True|R"] == {"events": 5, "k": 40, "n": 40, "rate": 1.0,
+                                           "lo": st["notes_reveal_T=True|R"]["lo"], "hi": 1.0}
+    assert st["notes_reveal_T=True|SA"]["k"] == 0
+    assert st["fake_encodes_T>=0.5=True|SA"]["events"] == 0
+
+
+def test_drops_are_counted_from_markers(tmp_path):
+    from rab.run import armdrop_path, drop_path, slot_path, write_slot
+
+    root = tmp_path / "res"
+    for eid, kind, explo in (("e1", "unreachable", False), ("e2", "unreachable", True)):
+        p = drop_path(root, eid, explo)
+        p.parent.mkdir(parents=True)
+        p.write_text(json.dumps({"event_id": eid, "kind": kind, "reason": "leak"}), encoding="utf-8")
+    armdrop_path(root, "e3", "W").parent.mkdir(parents=True)
+    armdrop_path(root, "e3", "W").write_text(json.dumps({"event_id": "e3", "arm": "W", "kind": "solvable"}),
+                                             encoding="utf-8")
+    write_slot(slot_path(root, "e3", "R", 0, failed=True), {"event_id": "e3", "kind": "solvable", "arm": "R"})
+    # a log line naming a drop must not count (markers only)
+    (root / "run_log.jsonl").write_text(json.dumps({"event_id": "e1", "drop": "leak"}) + "\n", encoding="utf-8")
+    d = A.drops(root, [], tmp_path / "none.json")
+    assert d["event drops: leak"] == {"solvable": 0, "unreachable": 1}
+    assert d["arm drops: W (events)"] == {"solvable": 1, "unreachable": 0}
+    assert d["failed slots (infrastructure, after two attempts)"] == {"solvable": 1, "unreachable": 0}
+    assert A.drops(root, [], tmp_path / "none.json", include_exploratory=True)["event drops: leak"]["unreachable"] == 2
+    assert A.slot_files(root) == []

@@ -14,8 +14,10 @@ Comparisons (:data:`COMPARISONS`), each against R run 0's live observation:
             the SB fake as it would have been written (``rab.place.render_fake``, pilot
             canary salted ``SB``). Events whose R observation does not contain the
             real file verbatim are skipped and counted.
-``RETEST``  test-retest: R run 0 against R run 1 on 30 seeded events; "real" is run 0
-            by convention, so the rate should sit at 50%.
+``RETEST``  test-retest on 30 seeded events: R run 0 and R run 1 shown twice, the second
+            time with the positions swapped (``orient`` 1 and 2). :func:`retest_summary`
+            reports the agreement (the same observation picked both times) and the share
+            of "A" answers (position bias). Not a comparison: no observation is fake.
 
 Canonicalised before the call (:func:`canonicalise_pair`): every ``CANARY-<12 hex>`` is
 replaced by one placeholder in both, the files' case lists are subsampled to equal
@@ -46,7 +48,6 @@ import os
 import random
 import re
 import string
-import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -54,6 +55,7 @@ import numpy as np
 
 from rab import REPO_ROOT
 from rab.constants import DISCRIMINATOR_MODEL, SEED
+from rab.km import load_prompt, prompt_sha256
 
 TEMPLATE_PATH = Path(__file__).resolve().parent / "prompts" / "discriminator_v1.txt"
 RESULTS = REPO_ROOT / "results"
@@ -79,12 +81,7 @@ def template_sha256() -> str:
 
 
 def load_template() -> tuple[str, string.Template]:
-    text = TEMPLATE_PATH.read_text(encoding="utf-8")
-    head, sep, rest = text.partition("=== system ===\n")
-    system, sep2, user = rest.partition("=== user ===\n")
-    if head or not sep or not sep2:
-        raise ValueError(f"{TEMPLATE_PATH} lacks the === system === / === user === markers")
-    return system.rstrip("\n"), string.Template(user.rstrip("\n"))
+    return load_prompt(TEMPLATE_PATH)
 
 
 def build_prompt(item: dict) -> tuple[str, str]:
@@ -93,8 +90,6 @@ def build_prompt(item: dict) -> tuple[str, str]:
     return system, tmpl.substitute(prefix_tail=item["prefix_tail"], call=item["call"], obs_a=a, obs_b=b)
 
 
-def prompt_sha256(system: str, user: str) -> str:
-    return hashlib.sha256((system + "\x00" + user).encode("utf-8")).hexdigest()
 
 
 # ------------------------------------------------------------------ canonicalisation
@@ -145,23 +140,32 @@ def prefix_tail(transcript: list[dict], k: int, n: int = PREFIX_TAIL) -> str:
     return "\n\n".join(_entry(e) for e in transcript[max(2, k - n):k])
 
 
-def _call_text(cont: dict) -> str:
-    entry = cont["transcript"][cont["block_k"] - 1]
-    call = entry["tool_calls"][-1]
+def _call_text(cont: dict, event: dict | None = None) -> str:
+    """The blocked call as ``name({args})``: the event's ``call`` when given, else the
+    assistant call whose id is the blocked tool entry's ``tool_call_id`` (the entry before
+    ``block_k`` is a tool message when the blocked call was not first in its turn)."""
+    call = (event or {}).get("call")
+    if not call:
+        tr, k = cont["transcript"], cont["block_k"]
+        want = tr[k]["tool_call_id"]
+        call = next(dict(c) for e in reversed(tr[:k]) if e["role"] == "assistant"
+                    for c in e.get("tool_calls") or [] if c["id"] == want)
     return f"{call['name']}({json.dumps(call['args'], ensure_ascii=False)})"
 
 
-def real_pos(event_id: str, comparison: str) -> str:
+def real_pos(event_id: str, comparison: str, orient: int = 0) -> str:
+    if comparison == RETEST:
+        return "A" if orient == 1 else "B"
     return "A" if _seed(event_id, comparison, "pos") % 2 == 0 else "B"
 
 
 def _item(cont: dict, comparison: str, obs_real: str, obs_other: str, event: dict,
-          exploratory: bool = False) -> dict:
+          exploratory: bool = False, orient: int = 0) -> dict:
     key = f"{cont['event_id']}:{comparison}"
-    pos = real_pos(cont["event_id"], comparison)
+    pos = real_pos(cont["event_id"], comparison, orient)
     a_real, other = canonicalise_pair(obs_real, obs_other, key)
     return {"comparison": comparison, "event_id": cont["event_id"], "task_id": event.get("task_id"),
-            "kind": event.get("kind"), "real_pos": pos, "call": _call_text(cont),
+            "kind": event.get("kind"), "real_pos": pos, "call": _call_text(cont, event), "orient": orient,
             "prefix_tail": prefix_tail(cont["transcript"], cont["block_k"]),
             "obs_real": a_real, "obs_other": other,
             "visible_test_text": cont.get("visible_test_text") or "", "exploratory": exploratory}
@@ -212,9 +216,11 @@ def build_items(slots: list[dict], events: dict[str, dict], sims: list[dict] | N
             retest_pool.append(eid)
     for eid in sorted(random.Random(_seed("retest")).sample(retest_pool, min(n_retest, len(retest_pool)))):
         runs = by_event[eid]
-        items.append(_item(runs[("R", 0)]["cont"], RETEST, runs[("R", 0)]["cont"]["observation"],
-                           runs[("R", 1)]["cont"]["observation"], events.get(eid, {}),
-                           bool(runs[("R", 0)].get("exploratory") or runs[("R", 1)].get("exploratory"))))
+        for orient in (1, 2):
+            items.append(_item(runs[("R", 0)]["cont"], RETEST, runs[("R", 0)]["cont"]["observation"],
+                               runs[("R", 1)]["cont"]["observation"], events.get(eid, {}),
+                               bool(runs[("R", 0)].get("exploratory") or runs[("R", 1)].get("exploratory")),
+                               orient))
     return items, dict(skipped)
 
 
@@ -284,6 +290,8 @@ def run(items: list[dict], caller, path: Path) -> list[dict]:
     for item in items:
         system, user = build_prompt(item)
         sha = prompt_sha256(system, user)
+        if item["comparison"] == RETEST:  # two R observations can be identical: keep both calls
+            sha = prompt_sha256(system, f"{user}\x00retest-orient-{item.get('orient', 0)}")
         row = cache.get((caller.model, sha))
         if row is None:
             res = caller(system, user)
@@ -294,7 +302,8 @@ def run(items: list[dict], caller, path: Path) -> list[dict]:
 
             row = {"model": caller.model, "prompt_sha256": sha, "template_sha256": template_sha256(),
                    "git": git_state(), "exploratory": bool(item.get("exploratory")),
-                   "comparison": item["comparison"], "event_id": item["event_id"], "task_id": item["task_id"],
+                   "comparison": item["comparison"], "orient": item.get("orient", 0),
+                   "event_id": item["event_id"], "task_id": item["task_id"],
                    "kind": item["kind"], "real_pos": item["real_pos"], "answer_raw": res.get("text", ""),
                    "answer": ans, "score": score(ans, item["real_pos"]), "stop": res.get("stop"),
                    "usage": res.get("usage") or {}, "features": pair_features(item)}
@@ -313,9 +322,9 @@ def balanced_accuracy(rows: list[dict]) -> float:
 
 
 def summarise(rows: list[dict], n_boot: int = N_BOOT) -> dict:
-    """Per comparison: pairs, balanced accuracy, event-bootstrap 95% interval (sorted keys)."""
+    """Per comparison (not RETEST): pairs, balanced accuracy, event-bootstrap 95% interval."""
     out = {}
-    for comp in sorted({r["comparison"] for r in rows}):
+    for comp in sorted({r["comparison"] for r in rows} - {RETEST}):
         mine = sorted((r for r in rows if r["comparison"] == comp), key=lambda r: r["event_id"])
         rng = random.Random(_seed("boot", comp))
         boots = [balanced_accuracy([mine[rng.randrange(len(mine))] for _ in mine]) for _ in range(n_boot)]
@@ -323,6 +332,25 @@ def summarise(rows: list[dict], n_boot: int = N_BOOT) -> dict:
         lo, hi = (np.percentile(boots, [2.5, 97.5]) if boots else (float("nan"), float("nan")))
         out[comp] = {"n": len(mine), "acc": balanced_accuracy(mine), "lo": float(lo), "hi": float(hi)}
     return out
+
+
+def retest_summary(rows: list[dict]) -> dict | None:
+    """Agreement over the RETEST pairs (the same R observation picked in both orientations)
+    and the share of "A" answers (position bias); an unparseable answer never agrees."""
+    mine = [r for r in rows if r["comparison"] == RETEST]
+    if not mine:
+        return None
+    by = defaultdict(dict)
+    for r in mine:
+        by[r["event_id"]][r.get("orient", 0)] = r
+    pairs = [(d[1], d[2]) for _, d in sorted(by.items()) if 1 in d and 2 in d]
+    # orient 1: run 0 at A; orient 2: run 0 at B. Picked run 0 = answer equals real_pos.
+    agree = [a["answer"] is not None and b["answer"] is not None
+             and (a["answer"] == a["real_pos"]) == (b["answer"] == b["real_pos"]) for a, b in pairs]
+    answers = [r["answer"] for r in mine if r["answer"] is not None]
+    return {"pairs": len(pairs), "agreement": float(np.mean(agree)) if agree else float("nan"),
+            "answers": len(answers),
+            "answer_A_share": answers.count("A") / len(answers) if answers else float("nan")}
 
 
 # ------------------------------------------------------------------ surface baseline
@@ -367,7 +395,7 @@ def _fit_logistic(x: np.ndarray, y: np.ndarray, l2: float = 1.0) -> np.ndarray:
 def surface_baseline(rows: list[dict]) -> dict:
     """Leave-one-task-out logistic model per comparison: balanced accuracy of its picks."""
     out = {}
-    for comp in sorted({r["comparison"] for r in rows}):
+    for comp in sorted({r["comparison"] for r in rows} - {RETEST}):
         mine = [r for r in rows if r["comparison"] == comp]
         tasks = sorted({r["task_id"] for r in mine})
         if len(tasks) < 2:
@@ -405,7 +433,8 @@ def discriminate(root: Path, caller, events_path: Path | None = None,
         slots = list(keep.values())
     items, skipped = build_items(slots, events, read_jsonl(root / "sims.jsonl"))
     rows = run(items, caller, root / "discriminator.jsonl")
-    return {"summary": summarise(rows), "surface": surface_baseline(rows), "skipped": skipped,
+    return {"summary": summarise(rows), "surface": surface_baseline(rows), "retest": retest_summary(rows),
+            "skipped": skipped,
             "template_sha256": template_sha256(), "n_items": len(items)}
 
 

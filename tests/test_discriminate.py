@@ -103,3 +103,42 @@ def test_live_haiku_answers_the_format():
             "prefix_tail": "[assistant] checking files", "call": 'bash({"command": "cat expected_outputs.json"})'}
     res = caller(*D.build_prompt(item))
     assert D.parse_answer(res["text"]) in ("A", "B")
+
+
+@pytest.mark.parametrize("short", ["I15_s0_p16", "I8_s10_p04", "I15_s9_p01", "I8_s9_p13"])
+def test_call_text_when_the_blocked_call_is_not_first_in_its_turn(short):
+    from rab import km
+    from rab.prefix import load_events
+
+    eid = f"dsv41flash-sal-v2_baseline_{short}"
+    ev = next((e for e in load_events() if e["event_id"] == eid), None)
+    if ev is None:
+        pytest.skip(f"{eid} is not in the current draw")
+    rec = km.load_record(ev["run_id"], ev["position"])
+    cont = {"transcript": rec["transcript"][: ev["k"] + 1], "block_k": ev["k"]}
+    assert cont["transcript"][ev["k"] - 1]["role"] == "tool"  # the case that used to IndexError
+    want = f"{ev['call']['name']}({json.dumps(ev['call']['args'], ensure_ascii=False)})"
+    assert D._call_text(cont) == want == D._call_text(cont, ev)
+
+
+def test_retest_agreement_and_position_bias():
+    rows = []
+    for i in range(10):
+        # orient 1: R0 at A; orient 2: R0 at B. Events 0-5 pick R0 both times; 6-9 always answer A.
+        a1, a2 = ("A", "B") if i < 6 else ("A", "A")
+        rows += [{"comparison": D.RETEST, "event_id": f"e{i}", "orient": 1, "real_pos": "A", "answer": a1},
+                 {"comparison": D.RETEST, "event_id": f"e{i}", "orient": 2, "real_pos": "B", "answer": a2}]
+    rt = D.retest_summary(rows)
+    assert rt["pairs"] == 10 and rt["agreement"] == pytest.approx(0.6)
+    assert rt["answer_A_share"] == pytest.approx(14 / 20)
+    assert D.summarise(rows) == {}
+
+
+def test_retest_items_with_identical_observations_are_two_calls(tmp_path):
+    base = {"comparison": D.RETEST, "event_id": "e1", "task_id": "t1", "kind": "solvable",
+            "obs_real": "same", "obs_other": "same", "prefix_tail": "tail", "call": "bash({})",
+            "visible_test_text": ""}
+    items = [dict(base, orient=1, real_pos="A"), dict(base, orient=2, real_pos="B")]
+    rows = D.run(items, D.FakeDiscriminator(), tmp_path / "d.jsonl")
+    assert [r["orient"] for r in rows] == [1, 2]
+    assert D.retest_summary(rows)["pairs"] == 1

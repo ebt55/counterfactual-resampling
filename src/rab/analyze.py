@@ -53,12 +53,12 @@ import math
 import random
 import sys
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 
 from rab import REPO_ROOT
+from rab.km import utc_now
 from rab.constants import CLASSES, KINDS, SEED
 
 RESULTS = REPO_ROOT / "results"
@@ -91,7 +91,9 @@ def load_slot(path: Path) -> dict:
 
 
 def slot_files(root: Path) -> list[Path]:
-    return sorted((Path(root) / "continuations").glob("*/*.json.gz"),
+    """Finished slot files (headline and ``-x``); ``.failed.json.gz`` files are not results."""
+    return sorted((p for p in (Path(root) / "continuations").glob("*/*.json.gz")
+                   if not p.name.endswith(".failed.json.gz")),
                   key=lambda p: (p.parent.name, p.name))
 
 
@@ -116,6 +118,12 @@ def run_row(slot: dict, event: dict | None, file: str = "") -> dict:
         "fake_vs_reference": agreement.get("vs_reference"),
         "fake_encodes_T": agreement.get("encodes_T"),
         "notes_reveal_T": bool((event or {}).get("notes_reveal_T")),
+        "note_names_file": bool(cls.get("note_names_file")),
+        "solution_kind": cls.get("solution_kind"),
+        "suspicion_content": bool(cls.get("suspicion_content")),
+        "suspicion_reasoning": cls.get("suspicion_reasoning"),
+        "first_action": cls.get("first_action"),
+        "r_retries": int((slot.get("replay") or {}).get("r_divergence_retries") or 0),
         "exploratory": bool(slot.get("exploratory")),
         "git_hash": (slot.get("git") or {}).get("git_hash"),
         "file": file,
@@ -259,7 +267,7 @@ def wilson(k: int, n: int, z: float = 1.959963984540054) -> tuple[float, float]:
     den = 1 + z * z / n
     centre = (p + z * z / (2 * n)) / den
     half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / den
-    return centre - half, centre + half
+    return max(0.0, centre - half), min(1.0, centre + half)
 
 
 def leading_class(rows: list[dict]) -> str | None:
@@ -323,6 +331,15 @@ def cell_analysis(rows: list[dict], n_perm: int = N_PERM) -> dict:
     out["two_by_two"] = {a: two_by_two(rows, a) for a in arms}
     out["rates"] = {a: rates(rows, a) for a in arms}
     out["moderators"] = moderators(rows, n_perm)
+    out["note_names_file"] = (rate_diff(rows, "SA", "R", lambda r: r["note_names_file"])
+                              if "SA" in arms else None)
+    out["w_file_share"] = (rate_diff(rows, "W", "R", lambda r: r["solution_kind"] == "file")
+                           if "W" in arms else None)
+    out["regrade_strata"] = regrade_strata(rows)
+    t_sa = out["compare"].get("SA", {}).get("tvd", float("nan"))
+    t_b = out["compare"].get("B", {}).get("tvd", float("nan"))
+    out["tvd_ratio_SA_B"] = (t_sa / t_b) if (not math.isnan(t_sa) and not math.isnan(t_b) and t_b > 0) \
+        else float("nan")
     return out
 
 
@@ -345,10 +362,82 @@ def rates(rows: list[dict], arm: str) -> dict:
     mine = [r for r in rows if r["arm"] == arm and r["klass"] != "error"]
     n = len(mine)
     out = {"n": n}
-    for key in ("reread", "named", "regrade_pass"):
+    for key in ("reread", "named", "regrade_pass", "suspicion_content"):
         k = sum(r[key] for r in mine)
         lo, hi = wilson(k, n)
         out[key] = {"k": k, "rate": k / n if n else float("nan"), "lo": lo, "hi": hi}
+    return out
+
+
+def rate_diff(rows: list[dict], arm: str, base: str, pred) -> dict:
+    """Pooled rate of ``pred`` in ``arm`` minus ``base`` (errors excluded), events having
+    both arms, with the event-bootstrap 95% interval and the ±10-point equivalence check."""
+    by = defaultdict(lambda: {arm: [0, 0], base: [0, 0]})
+    for r in rows:
+        if r["arm"] in (arm, base) and r["klass"] != "error":
+            cell = by[r["event_id"]][r["arm"]]
+            cell[0] += bool(pred(r))
+            cell[1] += 1
+    ids = sorted(e for e, d in by.items() if d[arm][1] and d[base][1])
+    if not ids:
+        nan = float("nan")
+        return {"events": 0, "arm_k": 0, "arm_n": 0, "base_k": 0, "base_n": 0, "arm_rate": nan,
+                "base_rate": nan, "diff": nan, "lo": nan, "hi": nan, "within10": False}
+    a = np.array([by[e][arm] for e in ids], dtype=float)
+    b = np.array([by[e][base] for e in ids], dtype=float)
+    rate = lambda x: x[..., 0] / x[..., 1]
+    diff = float(rate(a.sum(0)) - rate(b.sum(0)))
+    rng = np.random.default_rng(SEED + 3)
+    idx = rng.integers(0, len(ids), size=(N_BOOT, len(ids)))
+    boot = rate(a[idx].sum(1)) - rate(b[idx].sum(1))
+    lo, hi = (float(x) for x in np.nanpercentile(boot, [2.5, 97.5]))
+    return {"events": len(ids), "arm_k": int(a[:, 0].sum()), "arm_n": int(a[:, 1].sum()),
+            "base_k": int(b[:, 0].sum()), "base_n": int(b[:, 1].sum()),
+            "arm_rate": float(rate(a.sum(0))), "base_rate": float(rate(b.sum(0))), "diff": diff,
+            "lo": lo, "hi": hi, "within10": bool(lo > -EQUIV_MARGIN and hi < EQUIV_MARGIN)}
+
+
+def _event_levels(rows: list[dict]) -> dict[str, dict[str, bool | None]]:
+    """Per event: ``notes_reveal_T`` and ``fake_encodes_T>=0.5`` (mean over its SA runs)."""
+    out = {}
+    for e in sorted({r["event_id"] for r in rows}):
+        mine = [r for r in rows if r["event_id"] == e]
+        enc = [r["fake_encodes_T"] for r in mine if r["arm"] == "SA" and r["fake_encodes_T"] is not None]
+        out[e] = {"notes_reveal_T": mine[0]["notes_reveal_T"],
+                  "fake_encodes_T>=0.5": (float(np.mean(enc)) >= 0.5) if enc else None}
+    return out
+
+
+def regrade_strata(rows: list[dict]) -> dict:
+    """Regrade pass of R and SA within the moderator strata, with n per stratum."""
+    levels = _event_levels(rows)
+    out = {}
+    for name in ("notes_reveal_T", "fake_encodes_T>=0.5"):
+        for val in (True, False):
+            keep = {e for e, lv in levels.items() if lv[name] is not None and lv[name] == val}
+            for arm in ("R", "SA"):
+                mine = [r for r in rows if r["event_id"] in keep and r["arm"] == arm and r["klass"] != "error"]
+                k, n = sum(r["regrade_pass"] for r in mine), len(mine)
+                lo, hi = wilson(k, n)
+                out[f"{name}={val}|{arm}"] = {"events": len(keep), "k": k, "n": n,
+                                              "rate": k / n if n else float("nan"), "lo": lo, "hi": hi}
+    return out
+
+
+def data_rows(rows: list[dict]) -> dict:
+    """Data only, not in ``tables.md``: suspicion over reasoning and the first action."""
+    out = {}
+    for kind in KINDS:
+        for arm in ARM_ORDER:
+            mine = [r for r in rows if r["kind"] == kind and r["arm"] == arm and r["klass"] != "error"]
+            if not mine:
+                continue
+            out[f"{kind}|{arm}"] = {
+                "n": len(mine),
+                "suspicion_reasoning": {str(k): v for k, v in sorted(
+                    Counter(r["suspicion_reasoning"] for r in mine).items(), key=lambda x: str(x[0]))},
+                "first_action": dict(sorted(Counter(str(r["first_action"]) for r in mine).items())),
+            }
     return out
 
 
@@ -420,27 +509,49 @@ def verdict(analysis: dict) -> dict[str, str]:
 
 # ------------------------------------------------------------------ drops and cost
 
-def drops(root: Path, rows: list[dict], recount_path: Path = RECOUNT_PATH) -> dict:
+def _markers(root: Path, pattern: str, include_exploratory: bool) -> list[dict]:
+    out = []
+    for path in sorted(Path(root).glob(f"continuations/*/{pattern}")):
+        explo = path.name.endswith("-x.json") or path.name.endswith("-x.failed.json.gz")
+        if explo and not include_exploratory:
+            continue
+        if path.suffix == ".gz":
+            row = load_slot(path)
+        else:
+            row = json.loads(path.read_text(encoding="utf-8"))
+        out.append(row)
+    return out
+
+
+def drops(root: Path, rows: list[dict], recount_path: Path = RECOUNT_PATH,
+          events: dict[str, dict] | None = None, include_exploratory: bool = False) -> dict:
+    """Every drop, counted from the files the run leaves (markers), never from log lines."""
     root = Path(root)
+    kind_of = {**{e: v.get("kind") for e, v in (events or {}).items()},
+               **{r["event_id"]: r["kind"] for r in rows}}
     by_kind = lambda pred: {k: sum(1 for r in rows if r["kind"] == k and pred(r)) for k in KINDS}
+    count = lambda items: {k: sum(1 for i in items if (i.get("kind") or kind_of.get(i["event_id"])) == k)
+                           for k in KINDS}
     recount = json.loads(recount_path.read_text(encoding="utf-8")) if recount_path.is_file() else {}
     replay_drops = {k: len(v) for k, v in (recount.get("replay_drops") or {}).items()}
-    leaks = read_jsonl(root / "leaks.jsonl")
-    sims = read_jsonl(root / "sims.jsonl")
-    log = read_jsonl(root / "run_log.jsonl")
+    sims = [s for s in read_jsonl(root / "sims.jsonl") if include_exploratory or not s.get("exploratory")]
     sim_fail = Counter((s.get("family"), s.get("failure")) for s in sims if not s.get("ok"))
-    event_drops = Counter(l.get("drop") for l in log if l.get("drop"))
-    return {
-        "replay exclusions (before the draw)": {k: replay_drops.get(k, 0) for k in KINDS},
-        "leak drops (events)": {k: sum(1 for l in leaks if l.get("kind") == k and l.get("severity") == "drop")
-                                for k in KINDS},
-        "simulator failures (draws)": {f"{fam} {fail}": n for (fam, fail), n in sorted(
-            sim_fail.items(), key=lambda x: (str(x[0][0]), str(x[0][1])))},
-        "event drops in the run": dict(sorted(event_drops.items())),
-        "refusals (runs)": by_kind(lambda r: r["klass"] == "refusal"),
-        "errors (runs)": by_kind(lambda r: r["klass"] == "error"),
-        "provider mismatches (runs)": by_kind(lambda r: r["provider_mismatch"]),
-    }
+    dropped = _markers(root, "DROPPED*.json", include_exploratory)
+    arm_drops = _markers(root, "ARMDROP-*.json", include_exploratory)
+    failed = _markers(root, "*.failed.json.gz", include_exploratory)
+    out = {"replay exclusions (before the draw)": {k: replay_drops.get(k, 0) for k in KINDS}}
+    for reason in sorted({d.get("reason") for d in dropped}):
+        out[f"event drops: {reason}"] = count([d for d in dropped if d.get("reason") == reason])
+    for arm in sorted({d.get("arm") for d in arm_drops}):
+        out[f"arm drops: {arm} (events)"] = count([d for d in arm_drops if d.get("arm") == arm])
+    out["failed slots (infrastructure, after two attempts)"] = count(failed)
+    out["simulator failures (draws)"] = {f"{fam} {fail}": n for (fam, fail), n in sorted(
+        sim_fail.items(), key=lambda x: (str(x[0][0]), str(x[0][1])))}
+    out["R blocked-call retries (runs retried once)"] = by_kind(lambda r: r["arm"] == "R" and r["r_retries"] > 0)
+    out["refusals (runs)"] = by_kind(lambda r: r["klass"] == "refusal")
+    out["errors (runs)"] = by_kind(lambda r: r["klass"] == "error")
+    out["provider mismatches (runs)"] = by_kind(lambda r: r["provider_mismatch"])
+    return out
 
 
 def cost(root: Path, rows: list[dict]) -> dict:
@@ -526,25 +637,52 @@ def render(analysis: dict, drops_: dict, cost_: dict, verdicts: dict, ctl: dict,
               f"R 4-7 TVD {f3(en['R0_3_vs_R4_7']['tvd'])} (p {f3(en['R0_3_vs_R4_7']['p'])})"
               + (f"; without size-visible runs TVD {f3(c['no_size_visible']['tvd'])} "
                  f"(p {f3(c['no_size_visible']['p'])})" if c["no_size_visible"] else "") + ".", ""]
-        L += ["| arm | regrade pass | 95% Wilson | reread | named | flagged & fitted | flagged only | fitted only | neither |",
-              "|---|---|---|---|---|---|---|---|---|"]
+        L += ["| arm | regrade pass | 95% Wilson | reread | named | suspicion (content) | flagged & fitted | "
+              "flagged only | fitted only | neither |",
+              "|---|---|---|---|---|---|---|---|---|---|"]
         for a in arms:
             r, t = c["rates"][a], c["two_by_two"][a]
             g = r["regrade_pass"]
             L.append(f"| {a} | {g['k']}/{r['n']} ({pct(g['rate'])}) | {interval(g['lo'], g['hi'])} | "
-                     f"{pct(r['reread']['rate'])} | {pct(r['named']['rate'])} | "
+                     f"{pct(r['reread']['rate'])} | {pct(r['named']['rate'])} | {pct(r['suspicion_content']['rate'])} | "
                      f"{t['flagged=True/fitted=True']} | {t['flagged=True/fitted=False']} | "
                      f"{t['flagged=False/fitted=True']} | {t['flagged=False/fitted=False']} |")
         L += ["", "| moderator stratum (SA vs R) | events | TVD | p |", "|---|---|---|---|"]
         for name, m in c["moderators"].items():
             L.append(f"| {name} | {m['events']} | {f3(m['tvd'])} | {f3(m['p'])} |")
+        L += ["", "| regrade pass by stratum | events | R | SA |", "|---|---|---|---|"]
+        for name in ("notes_reveal_T=True", "notes_reveal_T=False", "fake_encodes_T>=0.5=True",
+                     "fake_encodes_T>=0.5=False"):
+            rr, ss = c["regrade_strata"][f"{name}|R"], c["regrade_strata"][f"{name}|SA"]
+            L.append(f"| {name} | {rr['events']} | {rr['k']}/{rr['n']} ({pct(rr['rate'])}) | "
+                     f"{ss['k']}/{ss['n']} ({pct(ss['rate'])}) |")
         L.append("")
+        for label, key in (("Note names the file", "note_names_file"),
+                           ("W solution reproduces the file (solution_kind = file)", "w_file_share")):
+            d = c.get(key)
+            if d and d["events"]:
+                arm = "SA" if key == "note_names_file" else "W"
+                L.append(f"{label}: {arm} {d['arm_k']}/{d['arm_n']} ({pct(d['arm_rate'])}), R {d['base_k']}/"
+                         f"{d['base_n']} ({pct(d['base_rate'])}); {arm} − R {pct(d['diff'])} points "
+                         f"{interval(d['lo'], d['hi'])}; within ±10: {'yes' if d['within10'] else 'no'}.")
+        L += [f"TVD(SA, R) / TVD(B, R) = {f3(c['tvd_ratio_SA_B'])}.", ""]
     if discriminator:
         L += ["## Discriminator (pairwise, which is real)", "",
-              "| comparison | pairs | balanced accuracy | 95% interval | surface-feature model (by task) |",
-              "|---|---|---|---|---|"]
-        for name, d in discriminator.items():
-            L.append(f"| {name} | {d['n']} | {pct(d['acc'])} | {interval(d['lo'], d['hi'])} | {pct(d.get('surface'))} |")
+              "| cell | comparison | pairs | balanced accuracy | 95% interval | surface-feature model (by task) |",
+              "|---|---|---|---|---|---|"]
+        for (kind, name), d in sorted(discriminator["by_cell"].items()):
+            L.append(f"| {kind} | {name} | {d['n']} | {pct(d['acc'])} | {interval(d['lo'], d['hi'])} | "
+                     f"{pct(d.get('surface'))} |")
+        L.append("")
+        for kind in sorted({k for k, _ in discriminator["by_cell"]}):
+            ss = discriminator["by_cell"].get((kind, "SSTAR"))
+            if ss:
+                L.append(f"S* lower interval bound ({kind}): {pct(ss['lo'])}.")
+        rt = discriminator.get("retest")
+        if rt:
+            L.append(f"Test-retest (the same two R observations shown twice, positions swapped): "
+                     f"{rt['pairs']} pairs, agreement {pct(rt['agreement'])}; answer A on "
+                     f"{pct(rt['answer_A_share'])} of the {rt['answers']} answers (position bias).")
         L.append("")
     if exploratory:
         hashes = sorted({str(r["git_hash"]) for r in exploratory})
@@ -624,15 +762,20 @@ def run(root: Path, *, placebo_mode: bool = False, n_perm: int = N_PERM,
     disc_rows = [r for r in read_jsonl(root / "discriminator.jsonl")
                  if include_exploratory or not r.get("exploratory")]
     if disc_rows:
-        from rab.discriminate import summarise, surface_baseline
-        surface = surface_baseline(disc_rows)
-        disc = {k: dict(v, surface=surface.get(k, {}).get("acc")) for k, v in summarise(disc_rows).items()}
-    text = render(analysis, drops(root, rows, recount_path), cost(root, rows), verdicts, ctl, disc, placebo_mode, n_perm,
+        from rab.discriminate import retest_summary, summarise, surface_baseline
+        by_cell = {}
+        for kind in KINDS:
+            mine = [r for r in disc_rows if r.get("kind") == kind]
+            surface = surface_baseline(mine)
+            for comp, v in summarise(mine).items():
+                by_cell[(kind, comp)] = dict(v, surface=surface.get(comp, {}).get("acc"))
+        disc = {"by_cell": by_cell, "retest": retest_summary(disc_rows)}
+    text = render(analysis, drops(root, rows, recount_path, events, include_exploratory), cost(root, rows), verdicts, ctl, disc, placebo_mode, n_perm,
                   explo, include_exploratory)
     suffix = "_placebo" if placebo_mode else ""
     (root / f"tables{suffix}.md").write_text(text, encoding="utf-8", newline="\n")
     files = slot_files(root)
-    meta = {"generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    meta = {"generated": utc_now(),
             "root": str(root), "placebo": placebo_mode, "n_slot_files": len(files),
             "n_exploratory": len(explo), "include_exploratory": include_exploratory, "git": git_state(),
             "n_perm": n_perm, "n_boot": N_BOOT, "seed": SEED,
@@ -641,6 +784,8 @@ def run(root: Path, *, placebo_mode: bool = False, n_perm: int = N_PERM,
     (root / f"tables{suffix}_meta.json").write_text(json.dumps(meta, sort_keys=True, indent=1) + "\n",
                                                    encoding="utf-8", newline="\n")
     if not placebo_mode:
+        (root / "tables_data.json").write_text(json.dumps(data_rows(rows), sort_keys=True, indent=1) + "\n",
+                                               encoding="utf-8", newline="\n")
         md, key = hand_read(root, rows)
         (root / "hand_read.md").write_text(md, encoding="utf-8", newline="\n")
         (root / "hand_read_key.json").write_text(json.dumps(key, sort_keys=True, indent=1) + "\n",

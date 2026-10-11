@@ -295,3 +295,37 @@ def test_tmp_trace_only_after_position_zero() -> None:
         assert TMP_TRACE_NOTE not in res.notes and res.ok
         out = res.sandbox.exec(res.item_key, "ls -ld /tmp").output
         assert out.startswith("drwxrwxrwt 2 "), out
+
+
+def _replay_check_tool():
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[1] / "tools" / "replay_check.py"
+    spec = importlib.util.spec_from_file_location("replay_check_tool", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_sweep_classes_are_byte_stable():
+    """The labels ``data/replay_sweep.json`` carries, on canned diffs of each class."""
+    classify = _replay_check_tool().classify
+    ls = lambda n, name: f"dr-xr-xr-x {n} root root    0 <ls-date> {name}"
+    cases = {
+        "ordering (stdout/stderr interleaving)": ("a\ncat: x: No such file or directory\nb",
+                                                  "cat: x: No such file or directory\na\nb"),
+        "ordering": ("a\nb\nc", "c\nb\na"),
+        "timeout": ("[command timed out after 60s]\n/a\n/b", "[command timed out after 60s]\n/a"),
+        "lines only in the recording": ("a\nb\nc", "a\nc"),
+        "ls -l link count": (ls(1, "tmp"), ls(2, "tmp")),
+        "/proc/<pid> entries": ("/\n/proc/373\n/sys", "/\n/proc/80\n/sys"),
+        "container id/hostname": ("HOSTNAME=891f9ef275a1\nPATH=/x", "HOSTNAME=0f7fecf7f3b1\nPATH=/x"),
+        "date/time outside an ls -l date column": ("Access: 2026-09-13 18:02", "Access: 2026-10-11 06:04"),
+        "other": ("print 1\nx = a", "print 2\nx = b"),
+    }
+    for label, (a, b) in cases.items():
+        assert classify(a, b) == label, label
+    sweep = json.loads((Path(__file__).resolve().parents[1] / "data" / "replay_sweep.json").read_text(encoding="utf-8"))
+    known = set(cases) | {"version string", "size-only", "truncation boundary", "lines only in the replay",
+                          "ls -l link count (/proc nlink)", "host-side step (/tmp trace or touch)", "replay error"}
+    assert {c for v in sweep["events"].values() for c in v["classes"]} <= known
