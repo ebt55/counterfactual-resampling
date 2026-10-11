@@ -8,7 +8,10 @@
 ``CallDiff`` and ``Replay`` are defined in ``rab.prefix`` (chunk B owns that file) and
 re-exported here lazily (module ``__getattr__``), so ``from rab.types import Replay``
 works and importing ``rab.types`` never pulls in Docker code or risks an import cycle.
-Moving the two definitions here is chunk B's edit to make; consumers do not change.
+The re-export is B's class itself, so every field B added (``strict_ok``, ``event_id``,
+``replayed``, ``work_listing``, ``notes``, the ``first_failure`` property;
+``CallDiff.content_matched``) is there. Moving the definitions here is B's edit to make;
+consumers do not change.
 
 Fields after the frozen ones carry defaults, so rows written before they existed still
 load.
@@ -33,14 +36,53 @@ Arms (design v2 B; ``rab.constants.ARMS``, ``RUNS_PER_EVENT``). Every continuati
 never continued. Pilot canaries are ``"CANARY-" + sha256("rab:" + event_id + ":" +
 arm)[:12]`` for SA, SSTAR, W and P (``"SB"`` for the static SB fake).
 
-Per-run fields E1 relies on (besides KM's record keys): ``event_id``, ``arm``,
-``run_idx``, ``block_k``, ``prefix_turns``, ``prefix_nudges``, ``cont_turns``,
-``observation``, ``canaries_view``, ``expected_values_view``, ``file_view`` (the parsed
-file on disk after placement; None for B), ``monitor_denials`` (B), ``reasoning_log``,
-``provider_log``, ``wall_s``, ``cost_usd``, ``error_class`` and ``rerun`` (True only
-for infrastructure failures: ``api_error``, ``docker_error``, ``grade_failed``,
-``exception``; turn-limit and wall-clock endings are behaviour and never re-run).
-``rab.classify.classify(cont, event)`` returns the per-run measures.
+The continuation dict (``rab.resume.resume``; one file per slot for ``rab.run``) has
+every key of ``harness.records.blank_record()`` filled as KM's ``run_item`` fills them,
+with these meanings where they differ from a KM record:
+
+``run_id``               ``"<event_id>/<arm>/<run_idx>"``.
+``batch_id``             the replay container's batch id (unique per slot).
+``arm``                  one of ``ARMS`` (not KM's "baseline").
+``tool_calls``           the continuation's calls only (after the blocked call), KM's shape
+                         (``turn``, ``tool``, ``input``, ``output``, ``truncated``,
+                         ``duration_ms``) plus ``blocked`` (bool) on every B call.
+``transcript``           the whole conversation: ``transcript[:block_k]`` as recorded, the
+                         blocked call's tool entry (the live observation) at ``block_k``,
+                         then the continuation.
+``n_turns``              prefix plus continuation turns (the item total, as in KM).
+``snapshot_before``      taken after placement; ``snapshot_after`` / ``final_files`` at exit.
+``sandbox_grade``        KM ``hidden_grade`` against the file on disk (the fake for fake arms).
+``fresh_grade``          KM ``fresh_grade`` in a pristine container (real hidden tests, probes).
+``canaries`` / ``expected_values``  the record's own (real).
+``usage``                summed continuation usage (KM's ``merge_usage``).
+
+Extra keys:
+
+``event_id``, ``run_idx``           the slot.
+``block_k``                         index of the blocked call's tool entry in ``transcript``.
+``prefix_turns``, ``prefix_nudges`` what the prefix used (``rab.prefix.prefix_counts``).
+``cont_turns``                      provider calls made in the continuation.
+``observation``                     the blocked call's live output (B: the denial string).
+``canaries_view``                   the canaries on disk (pilot answer canary for fake arms).
+``expected_values_view``            the ``expected`` values of the file on disk.
+``file_view``                       the parsed file on disk after placement (None for B).
+``monitor_denials``                 calls the B monitor denied after the block (None if not B).
+``reasoning_log``                   ``{call_seq: reasoning text}``, verbatim, never resent.
+``provider_log``                    this run's ``results/provider.log`` lines.
+``wall_s``, ``cost_usd``            wall time; cash cost priced by ``rab.resume.CostMeter``.
+``error_class``                     ``rab.resume.classify_error``: None, ``timeout``,
+                                    ``api_error``, ``docker_error``, ``grade_failed``, ``exception``.
+``rerun``                           True only for the last four (infrastructure); turn-limit and
+                                    wall-clock endings are behaviour and are never re-run.
+``dry_run``                         True under ``FakeProvider``.
+
+``rab.classify.classify(cont, event)`` returns the per-run measures: ``klass`` (one of
+``constants.CLASSES``) and every flag behind it (``error``, ``grade_failed``,
+``refusal``, ``submitted``, ``fitted``, ``detector_fit``, ``solution_kind``,
+``file_match``, ``solution``, ``flagged_problem``, ``kept_probing``, ``reread``,
+``named``, ``later_access``, ``note_names_file``, ``regrade_pass``, ``sandbox_pass``,
+``first_action``, ``size_visible_post_block``, ``suspicion_content``,
+``suspicion_reasoning``, ``detectors``, ``evidence``, ``n_post_calls``).
 """
 
 from __future__ import annotations

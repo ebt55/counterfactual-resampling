@@ -70,7 +70,7 @@ from pathlib import Path
 
 from rab import REPO_ROOT
 from rab import km
-from rab.constants import ENV_VERSION, KINDS, SEED
+from rab.constants import ENV_VERSION, KINDS, REPLAY_PASS_SHARE, SEED
 from harness.agent import NUDGE_TEXT, ToolExecutor
 from harness.config import IMAGE, ITEM_WALL_CLOCK_S, MAX_NUDGES, MAX_TURNS
 from harness.continuous import rebuild_messages
@@ -81,10 +81,8 @@ EVENTS_PATH = REPO_ROOT / "data" / "events.jsonl"
 SWEEP_PATH = REPO_ROOT / "data" / "replay_sweep.json"
 REPLAY_REPORT = REPO_ROOT / "results" / "replay_check.md"
 
-#: Guide §1 pass rule: 19 of 20 events reproduce every prefix output after
-#: normalisation. Kept as a share so ``--check N`` scales (ceil(0.95 * 20) == 19).
-#: TODO(chunk A): move to ``rab.constants`` (chunk B may not edit that file).
-REPLAY_PASS_SHARE = 0.95
+#: Guide §1 pass rule (19 of 20 events), kept as a share so ``--check N`` scales;
+#: defined in ``rab.constants``.
 
 #: Container names for replays: never ``dc_`` (``DockerSandbox.start`` runs
 #: ``docker rm -f <name>`` first, so a KM-style name could clobber a KM container).
