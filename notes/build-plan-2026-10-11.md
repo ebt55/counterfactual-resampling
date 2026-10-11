@@ -94,6 +94,12 @@ Day-0 Docker checks (image build, KM dry run, replay) run in B. The keyed
 day-0 checks (served pin call, credit) wait for fresh keys. Ebin's items
 (sentence, PREREG approval, emails, 20 rows, keys) stay his.
 
+## Design v2
+
+`notes/design-v2-2026-10-11.md` (written after four independent reviews on
+11 Oct) supersedes decisions 8, 10, 11 and 12 below and the guide's arm
+structure, controls, statistics and wording. Read it before chunks F, E1, E2.
+
 ## Decisions after the Opus review (11 Oct, binding; each lands in PREREG for Ebin's approval)
 
 Where a decision departs from the guide, PREREG lists the departure.
