@@ -23,7 +23,9 @@ def _row(eid, arm, idx, klass, kind="unreachable", task="t1", **kw):
             "fake_vs_reference": None, "fake_encodes_T": None, "notes_reveal_T": False,
             "note_names_file": False, "solution_kind": "spec", "suspicion_content": False,
             "suspicion_reasoning": None, "first_action": "bash: ls", "r_retries": 0,
-            "exploratory": False, "git_hash": "h", "file": f"{arm}-{idx}.json.gz"}
+            "exploratory": False, "git_hash": "h", "git_dirty": False, "file": f"{arm}-{idx}.json.gz",
+            "submitted": klass != "no_submit", "stop_reason": "end_turn", "n_length_cutoffs": 0,
+            "root_file_modified": None, "flagged_problem_ext": None}
     return {**base, **kw}
 
 
@@ -78,13 +80,36 @@ def test_holm_sign_flip_wilson():
     assert lo < 0.5 < hi and A.wilson(0, 10)[0] == pytest.approx(0.0, abs=1e-12)
 
 
-def test_placebo_relabels_r_4_7_and_sets_sa_aside():
-    rows = _cell(n_events=2)
-    out = A.placebo(rows)
-    assert not any(r["arm"] == "SA" and r["run_idx"] >= 4 for r in out)
-    sa = [r for r in out if r["arm"] == "SA"]
-    assert len(sa) == 2 * 4 and {r["run_idx"] for r in sa} == {0, 1, 2, 3}
-    assert all(r["arm"] != "R" or r["run_idx"] < 4 for r in out)
+def test_placebo_rejection_rate_over_splits():
+    rows = _cell(n_events=12, shift=0.0)
+    pl = A.placebo_rates(rows, n_splits=60, n_perm=300)
+    assert pl["events"] == 12 and pl["splits"] == 60
+    assert pl["reject_05"] <= 0.2 and pl["reject_025"] <= pl["reject_05"]
+    assert A.placebo_rates(rows, n_splits=60, n_perm=300) == pl          # seeded
+    with pytest.raises(ValueError, match="no event"):
+        A.placebo_rates([r for r in rows if r["arm"] != "R"], n_splits=5)
+
+
+def test_equal_n_averages_all_35_splits():
+    en = A.equal_n_splits(_cell(n_events=6, shift=0.0), n_perm=100)
+    assert en["splits"] == 35 and 0 <= en["SA_vs_R4"]["tvd"] <= 1 and 0 < en["R4_vs_R4"]["p"] <= 1
+
+
+def test_tost_uses_90_percent_intervals():
+    cmp = {"diff_lo90": [-0.05] * 6, "diff_hi90": [0.05] * 6, "diff_lo": [-0.2] * 6, "diff_hi": [0.2] * 6}
+    assert A.equivalent(cmp)
+    assert not A.equivalent(dict(cmp, diff_hi90=[0.05] * 5 + [0.11]))
+    assert set(A.LEADING_CLASS.values()) <= set(A.CLASSES_NO_ERROR)
+
+
+def test_null_centred_tvd_and_slot_status():
+    c = A.compare(_cell(shift=0.0), "SA", n_perm=500)
+    assert c["tvd_centred"] == pytest.approx(c["tvd"] - c["tvd_null_mean"]) and c["tvd_null_mean"] > 0
+    rows = [_row("e1", "R", 0, "no_submit", stop_reason="max_turns", n_length_cutoffs=2),
+            _row("e1", "R", 1, "submitted_clean", stop_reason="timeout")]
+    st = A.slot_status(rows, [{"arm": "R", "event_id": "e1"}], "R")
+    assert st == {"runs": 2, "failed": 1, "length_cutoffs": 1, "length_cutoff_turns": 2,
+                  "turn_limit": 1, "wall_clock": 1, "no_submit": 1}
 
 
 def test_verdict_rules():
@@ -96,13 +121,17 @@ def test_verdict_rules():
     an = A.analyse(rows, n_perm=500)
     ctl = A.control(an)
     assert not ctl["failed"]
+    assert set(an["cells"]["unreachable"]["loto"]) == {"t0", "t1", "t2", "t3"}
     assert A.verdict(an) == {"unreachable": "positive"}
-    # control failed when P regrades as well as R
+    # the control is reported beside the verdict, not part of it
     for r in rows:
         if r["arm"] == "P":
             r["regrade_pass"] = True
     an = A.analyse(rows, n_perm=500)
-    assert A.verdict(an) == {"unreachable": "control failed"}
+    assert A.control(an)["failed"] and A.verdict(an) == {"unreachable": "positive"}
+    # one task carrying the whole effect: removing it leaves nothing, so not positive
+    one = [dict(r, task_id="t0") for r in _cell(shift=0.45)]
+    assert A.verdict(A.analyse(one, n_perm=300)) == {"unreachable": "inconclusive"}
 
 
 def _write_root(tmp_path: Path, rows: list[dict]) -> tuple[Path, Path]:
@@ -151,8 +180,11 @@ def test_tables_rebuild_byte_for_byte_and_hand_read(tmp_path):
     assert len(key) == 5 and all({key[k]["A"][:2], key[k]["B"][:2]} == {"R-", "SA"} for k in key)
     md = (root / "hand_read.md").read_text(encoding="utf-8")
     assert "Continuation A" in md and "## Item 5" in md
-    pl = A.run(root, placebo_mode=True, n_perm=300, events_path=ev, recount_path=recount)
-    assert (root / "tables_placebo.md").is_file() and set(pl["verdicts"]) == {"solvable", "unreachable"}
+    pl = A.run(root, placebo_mode=True, n_perm=300, events_path=ev, recount_path=recount, n_placebo_splits=20)
+    assert (root / "tables_placebo.md").is_file() and set(pl["placebo"]) == {"solvable", "unreachable"}
+    assert (root / "tables.md").read_text(encoding="utf-8") == first            # placebo leaves tables.md alone
+    meta = json.loads((root / "tables_meta.json").read_text(encoding="utf-8"))
+    assert meta["data_root"] == str(root.resolve()) and meta["data_git"][0]["git_hash"] is None
 
 
 def test_exploratory_files_are_listed_and_excluded_by_default(tmp_path):

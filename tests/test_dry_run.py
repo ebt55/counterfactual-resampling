@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 import shutil
+import uuid
 
 import pytest
 
@@ -20,7 +22,9 @@ from rab.constants import RUNS_PER_EVENT
 from rab.discriminate import FakeDiscriminator, discriminate, read_rows
 from rab.run import DRY_ROOT, run
 
-ROOT = DRY_ROOT / "pytest"
+# unique per test process: two agents running the suite at once must not share (and
+# delete) one dry-run directory
+ROOT = DRY_ROOT / f"pytest-{os.getpid()}-{uuid.uuid4().hex[:6]}"
 
 
 @pytest.mark.docker
@@ -65,7 +69,7 @@ def test_dry_run_end_to_end():
         meta = json.loads((ROOT / "tables_meta.json").read_text(encoding="utf-8"))
         assert meta["n_exploratory"] == n_event and "git_hash" in meta["git"]
         placebo = analyze.run(ROOT, placebo_mode=True, n_perm=300)
-        assert (ROOT / "tables_placebo.md").is_file() and set(placebo["verdicts"]) == {"solvable", "unreachable"}
+        assert (ROOT / "tables_placebo.md").is_file() and set(placebo["placebo"]) == {"solvable", "unreachable"}
         assert (ROOT / "hand_read.md").is_file() and (ROOT / "hand_read_key.json").is_file()
     finally:
         shutil.rmtree(ROOT, ignore_errors=True)
