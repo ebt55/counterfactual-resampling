@@ -129,18 +129,20 @@
     "total": 229,
     "unreachable": 111
   },
-  "events_jsonl_sha256": "c0fbfe0d077e9782897d3943218df9dcdf05b4050aec228130068897bb268d4d",
+  "events_jsonl_sha256": "a83ac8d316cd6e512c83f104060ed307419b6afa0d4088684d7d8430f577aa8c",
   "recorded": {
     "solvable": {
       "drawn": {
+        "blocked_output_shows_size": 1,
         "combined_null": 6,
         "combined_true": 8,
-        "declared": 0,
+        "flagged_problem": 0,
         "later_access": 14,
         "later_named": 14,
         "later_reread": 1,
         "n": 60,
         "note_names_file": 15,
+        "notes_reveal_T": 60,
         "outcome": {
           "cheat": 60
         },
@@ -149,17 +151,24 @@
           "root": 60
         },
         "regrade_pass": 60,
-        "work_mtime_known": 49
+        "work_mtime_from": {
+          "None": 10,
+          "blocked_output": 1,
+          "prefix": 49
+        },
+        "work_mtime_known": 50
       },
       "eligible": {
+        "blocked_output_shows_size": 1,
         "combined_null": 7,
         "combined_true": 10,
-        "declared": 0,
+        "flagged_problem": 0,
         "later_access": 17,
         "later_named": 17,
         "later_reread": 1,
         "n": 74,
         "note_names_file": 18,
+        "notes_reveal_T": 73,
         "outcome": {
           "cheat": 74
         },
@@ -168,17 +177,24 @@
           "root": 74
         },
         "regrade_pass": 74,
-        "work_mtime_known": 62
+        "work_mtime_from": {
+          "None": 11,
+          "blocked_output": 1,
+          "prefix": 62
+        },
+        "work_mtime_known": 63
       },
       "found": {
+        "blocked_output_shows_size": 1,
         "combined_null": 7,
         "combined_true": 10,
-        "declared": 0,
+        "flagged_problem": 0,
         "later_access": 17,
         "later_named": 17,
         "later_reread": 1,
         "n": 76,
         "note_names_file": 19,
+        "notes_reveal_T": 75,
         "outcome": {
           "cheat": 76
         },
@@ -187,19 +203,26 @@
           "root": 76
         },
         "regrade_pass": 76,
-        "work_mtime_known": 64
+        "work_mtime_from": {
+          "None": 11,
+          "blocked_output": 1,
+          "prefix": 64
+        },
+        "work_mtime_known": 65
       }
     },
     "unreachable": {
       "drawn": {
+        "blocked_output_shows_size": 7,
         "combined_null": 4,
         "combined_true": 14,
-        "declared": 39,
+        "flagged_problem": 39,
         "later_access": 29,
         "later_named": 29,
         "later_reread": 5,
         "n": 60,
         "note_names_file": 34,
+        "notes_reveal_T": 31,
         "outcome": {
           "cheat": 60
         },
@@ -208,17 +231,24 @@
           "root": 60
         },
         "regrade_pass": 50,
-        "work_mtime_known": 51
+        "work_mtime_from": {
+          "None": 6,
+          "blocked_output": 3,
+          "prefix": 51
+        },
+        "work_mtime_known": 54
       },
       "eligible": {
+        "blocked_output_shows_size": 12,
         "combined_null": 7,
         "combined_true": 24,
-        "declared": 60,
+        "flagged_problem": 60,
         "later_access": 47,
         "later_named": 47,
         "later_reread": 12,
         "n": 96,
         "note_names_file": 54,
+        "notes_reveal_T": 47,
         "outcome": {
           "cheat": 95,
           "error": 1
@@ -228,17 +258,24 @@
           "root": 96
         },
         "regrade_pass": 81,
-        "work_mtime_known": 78
+        "work_mtime_from": {
+          "None": 11,
+          "blocked_output": 7,
+          "prefix": 78
+        },
+        "work_mtime_known": 85
       },
       "found": {
+        "blocked_output_shows_size": 14,
         "combined_null": 9,
         "combined_true": 25,
-        "declared": 72,
+        "flagged_problem": 72,
         "later_access": 57,
         "later_named": 57,
         "later_reread": 13,
         "n": 111,
         "note_names_file": 66,
+        "notes_reveal_T": 57,
         "outcome": {
           "cheat": 110,
           "error": 1
@@ -249,7 +286,12 @@
           "root": 110
         },
         "regrade_pass": 94,
-        "work_mtime_known": 93
+        "work_mtime_from": {
+          "None": 11,
+          "blocked_output": 7,
+          "prefix": 93
+        },
+        "work_mtime_known": 100
       }
     }
   },
