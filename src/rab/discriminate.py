@@ -64,7 +64,9 @@ from rab.km import load_prompt, prompt_sha256
 TEMPLATE_PATH = Path(__file__).resolve().parent / "prompts" / "discriminator_v1.txt"
 RESULTS = REPO_ROOT / "results"
 COMPARISONS = ("SA", "SB", "SSTAR", "P", "W")
-RETEST = "RETEST"
+RETEST = "RETEST"            # legacy rows only (pilot 2): R run 0 against R run 1
+CONSISTENCY = "CONSISTENCY"  # SA run 0 against R run 0, shown twice, positions swapped
+LS_SIZE_RE = re.compile(r"^[-l][rwxsStT-]{9}\S*\s+\d+\s+\S+\s+\S+\s+(\d+)\s+.*\sexpected_outputs\.json$", re.M)
 N_RETEST = 30
 N_BOOT = 1_000
 PREFIX_TAIL = 4
@@ -98,17 +100,43 @@ def build_prompt(item: dict) -> tuple[str, str]:
 
 # ------------------------------------------------------------------ canonicalisation
 
-def find_file(text: str) -> tuple[int, int, dict] | None:
-    """The first JSON object in ``text`` that has a ``cases`` list: ``(start, end, obj)``."""
+def find_files(text: str) -> list[tuple[int, int, dict]]:
+    """Every JSON object in ``text`` that has a ``cases`` list, non-overlapping, in order."""
     dec = json.JSONDecoder()
+    out, pos = [], 0
     for m in re.finditer(r"\{", text):
+        if m.start() < pos:
+            continue
         try:
             obj, end = dec.raw_decode(text, m.start())
         except json.JSONDecodeError:
             continue
         if isinstance(obj, dict) and isinstance(obj.get("cases"), list):
-            return m.start(), end, obj
-    return None
+            out.append((m.start(), end, obj))
+            pos = end
+    return out
+
+
+def find_file(text: str) -> tuple[int, int, dict] | None:
+    """The first JSON object in ``text`` that has a ``cases`` list: ``(start, end, obj)``."""
+    found = find_files(text)
+    return found[0] if found else None
+
+
+def file_size(text: str) -> int | None:
+    """Bytes of the first answer file shown in ``text`` (KM serialisation ends in a newline)."""
+    found = find_file(text)
+    if not found:
+        return None
+    start, end, _ = found
+    return len(text[start:end].encode("utf-8")) + (1 if text[end:end + 1] == "\n" else 0)
+
+
+def prefix_listed_size(transcript: list[dict], k: int) -> int | None:
+    """The size an ``ls -l`` in the prefix showed for ``expected_outputs.json`` (last one)."""
+    sizes = [int(m) for e in transcript[:k] if e.get("role") == "tool"
+             for m in LS_SIZE_RE.findall(e.get("content") or "")]
+    return sizes[-1] if sizes else None
 
 
 def _strip(text: str) -> str:
@@ -116,17 +144,23 @@ def _strip(text: str) -> str:
 
 
 def canonicalise_pair(a: str, b: str, key: str) -> tuple[str, str]:
-    """Canary placeholder, equal-length case lists (seeded), trailing whitespace stripped."""
+    """Canary placeholder, equal-length case lists (seeded), trailing whitespace stripped.
+
+    Every occurrence of the file in either observation is subsampled (a double ``cat``
+    shows it twice), all to the shortest case list among them; one seeded choice of
+    case indices per occurrence."""
     a, b = CANARY_RE.sub(CANARY_TOKEN, a), CANARY_RE.sub(CANARY_TOKEN, b)
-    fa, fb = find_file(a), find_file(b)
+    fa, fb = find_files(a), find_files(b)
     if fa and fb:
-        n = min(len(fa[2]["cases"]), len(fb[2]["cases"]))
+        n = min(len(f[2]["cases"]) for f in fa + fb)
         out = []
-        for side, (text, (start, end, obj)) in zip("ab", ((a, fa), (b, fb))):
-            cases = obj["cases"]
-            keep = sorted(random.Random(_seed(key, side)).sample(range(len(cases)), n))
-            obj = dict(obj, cases=[cases[i] for i in keep])
-            out.append(text[:start] + json.dumps(obj, indent=2) + text[end:])
+        for side, text, found in (("a", a, fa), ("b", b, fb)):
+            for occ, (start, end, obj) in reversed(list(enumerate(found))):
+                cases = obj["cases"]
+                keep = sorted(random.Random(_seed(key, side, occ)).sample(range(len(cases)), n))
+                obj = dict(obj, cases=[cases[i] for i in keep])
+                text = text[:start] + json.dumps(obj, indent=2) + text[end:]
+            out.append(text)
         a, b = out
     return _strip(a), _strip(b)
 
@@ -158,21 +192,51 @@ def _call_text(cont: dict, event: dict | None = None) -> str:
 
 
 def real_pos(event_id: str, comparison: str, orient: int = 0) -> str:
-    if comparison == RETEST:
+    """Consistency pairs by orientation; otherwise a provisional seeded position that
+    :func:`balance_positions` replaces within each (cell, comparison)."""
+    if comparison in (RETEST, CONSISTENCY):
         return "A" if orient == 1 else "B"
     return "A" if _seed(event_id, comparison, "pos") % 2 == 0 else "B"
 
 
+def balance_positions(items: list[dict]) -> list[dict]:
+    """Within each (cell, comparison): a seeded permutation with exactly half real-first
+    (the odd one out decided by the seed). Consistency pairs keep their orientations."""
+    groups = defaultdict(list)
+    for it in items:
+        if it["comparison"] not in (RETEST, CONSISTENCY):
+            groups[(it["kind"], it["comparison"])].append(it)
+    for (kind, comp), mine in sorted(groups.items(), key=lambda x: (str(x[0][0]), x[0][1])):
+        mine.sort(key=lambda it: it["event_id"])
+        rng = random.Random(_seed("positions", kind, comp))
+        first = ["A", "B"] if rng.random() < 0.5 else ["B", "A"]
+        pos = [first[i % 2] for i in range(len(mine))]
+        rng.shuffle(pos)
+        for it, ps in zip(mine, pos):
+            it["real_pos"] = ps
+    return items
+
+
 def _item(cont: dict, comparison: str, obs_real: str, obs_other: str, event: dict,
-          exploratory: bool = False, orient: int = 0) -> dict:
+          exploratory: bool = False, orient: int = 0, size_matched: bool | None = None,
+          sa_departs: bool | None = None) -> dict:
     key = f"{cont['event_id']}:{comparison}"
     pos = real_pos(cont["event_id"], comparison, orient)
     a_real, other = canonicalise_pair(obs_real, obs_other, key)
+    size_real, size_other = file_size(obs_real), file_size(obs_other)
+    if size_matched is None and size_real is not None and size_other is not None:
+        size_matched = size_real == size_other
     return {"comparison": comparison, "event_id": cont["event_id"], "task_id": event.get("task_id"),
             "kind": event.get("kind"), "real_pos": pos, "call": _call_text(cont, event), "orient": orient,
             "prefix_tail": prefix_tail(cont["transcript"], cont["block_k"]),
             "obs_real": a_real, "obs_other": other,
-            "visible_test_text": cont.get("visible_test_text") or "", "exploratory": exploratory}
+            "visible_test_text": cont.get("visible_test_text") or "", "exploratory": exploratory,
+            # baselines and strata, from the raw (not canonicalised) observations
+            "len_real": len(obs_real), "len_other": len(obs_other),
+            "size_real": size_real, "size_other": size_other,
+            "prefix_size": prefix_listed_size(cont["transcript"], cont["block_k"]),
+            "prefix_shows_size": event.get("prefix_shows_size"), "size_matched": size_matched,
+            "sa_departs": sa_departs}
 
 
 def sb_observation(obs_real: str, real_text: str, sb_text: str) -> str | None:
@@ -202,11 +266,16 @@ def build_items(slots: list[dict], events: dict[str, dict], sims: list[dict] | N
         cont = r0["cont"]
         real_obs = cont["observation"]
         x0 = bool(r0.get("exploratory"))
+        sa_slot = runs.get(("SA", 0))
+        vs_ref = (((sa_slot or {}).get("placed") or {}).get("fake_agreement") or {}).get("vs_reference")
+        sa_departs = None if vs_ref is None else vs_ref < 1.0
         for comp in ("SA", "SSTAR", "P", "W"):
             other = runs.get((comp, 0))
             if other is not None:
                 items.append(_item(cont, comp, real_obs, other["cont"]["observation"], ev,
-                                   x0 or bool(other.get("exploratory"))))
+                                   x0 or bool(other.get("exploratory")),
+                                   size_matched=(other.get("placed") or {}).get("size_matched"),
+                                   sa_departs=sa_departs))
         if eid in sb:
             tdir = km.task_dir(ev.get("item_key") or cont["item_key"], ev.get("kind") or "solvable")
             real_text = real_file_text(tdir)
@@ -215,17 +284,17 @@ def build_items(slots: list[dict], events: dict[str, dict], sims: list[dict] | N
             if obs is None:
                 skipped["SB: real file not verbatim in R's observation"] += 1
             else:
-                items.append(_item(cont, "SB", real_obs, obs, ev, x0))
+                items.append(_item(cont, "SB", real_obs, obs, ev, x0, sa_departs=sa_departs))
         if ("SA", 0) in runs:
             retest_pool.append(eid)
     for eid in sorted(random.Random(_seed("retest")).sample(retest_pool, min(n_retest, len(retest_pool)))):
         runs = by_event[eid]
         for orient in (1, 2):
-            items.append(_item(runs[("R", 0)]["cont"], RETEST, runs[("R", 0)]["cont"]["observation"],
+            items.append(_item(runs[("R", 0)]["cont"], CONSISTENCY, runs[("R", 0)]["cont"]["observation"],
                                runs[("SA", 0)]["cont"]["observation"], events.get(eid, {}),
                                bool(runs[("R", 0)].get("exploratory") or runs[("SA", 0)].get("exploratory")),
                                orient))
-    return items, dict(skipped)
+    return balance_positions(items), dict(skipped)
 
 
 # ------------------------------------------------------------------ callers
@@ -295,7 +364,7 @@ def run(items: list[dict], caller, path: Path) -> list[dict]:
     for item in items:
         system, user = build_prompt(item)
         sha = prompt_sha256(system, user)
-        if item["comparison"] == RETEST:  # two R observations can be identical: keep both calls
+        if item["comparison"] in (RETEST, CONSISTENCY):  # keep both orientations as two calls
             sha = prompt_sha256(system, f"{user}\x00retest-orient-{item.get('orient', 0)}")
         row = cache.get(key(caller.model, sha, item))
         if row is None:
@@ -311,7 +380,10 @@ def run(items: list[dict], caller, path: Path) -> list[dict]:
                    "event_id": item["event_id"], "task_id": item["task_id"],
                    "kind": item["kind"], "real_pos": item["real_pos"], "answer_raw": res.get("text", ""),
                    "answer": ans, "score": score(ans, item["real_pos"]), "stop": res.get("stop"),
-                   "usage": res.get("usage") or {}, "features": pair_features(item)}
+                   "usage": res.get("usage") or {}, "features": pair_features(item),
+                   **{k: item.get(k) for k in ("len_real", "len_other", "size_real", "size_other",
+                                               "prefix_size", "prefix_shows_size", "size_matched",
+                                               "sa_departs")}}
             Path(path).parent.mkdir(parents=True, exist_ok=True)
             with open(path, "a", encoding="utf-8", newline="\n") as fh:
                 fh.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
@@ -329,7 +401,7 @@ def balanced_accuracy(rows: list[dict]) -> float:
 def summarise(rows: list[dict], n_boot: int = N_BOOT) -> dict:
     """Per comparison (not RETEST): pairs, balanced accuracy, event-bootstrap 95% interval."""
     out = {}
-    for comp in sorted({r["comparison"] for r in rows} - {RETEST}):
+    for comp in sorted({r["comparison"] for r in rows} - {RETEST, CONSISTENCY}):
         mine = sorted((r for r in rows if r["comparison"] == comp), key=lambda r: r["event_id"])
         rng = random.Random(_seed("boot", comp))
         boots = [balanced_accuracy([mine[rng.randrange(len(mine))] for _ in mine]) for _ in range(n_boot)]
@@ -339,10 +411,12 @@ def summarise(rows: list[dict], n_boot: int = N_BOOT) -> dict:
     return out
 
 
-def retest_summary(rows: list[dict]) -> dict | None:
-    """Agreement over the RETEST pairs (the same R observation picked in both orientations)
-    and the share of "A" answers (position bias); an unparseable answer never agrees."""
-    mine = [r for r in rows if r["comparison"] == RETEST]
+def retest_summary(rows: list[dict], comparison: str = CONSISTENCY) -> dict | None:
+    """Agreement over the pairs shown twice (the same observation called real in both
+    orientations) and the share of "A" answers (position bias); an unparseable answer
+    never agrees. ``comparison`` is the label in the rows, so legacy R-vs-R rows
+    (``RETEST``) are never reported as SA-vs-R consistency."""
+    mine = [r for r in rows if r["comparison"] == comparison]
     if not mine:
         return None
     by = defaultdict(dict)
@@ -356,6 +430,47 @@ def retest_summary(rows: list[dict]) -> dict | None:
     return {"pairs": len(pairs), "agreement": float(np.mean(agree)) if agree else float("nan"),
             "answers": len(answers),
             "answer_A_share": answers.count("A") / len(answers) if answers else float("nan")}
+
+
+def _baseline_score(row: dict, rule: str) -> float | None:
+    if rule == "longer":
+        a, b = row.get("len_real"), row.get("len_other")
+        if a is None or b is None:
+            return None
+        return 1.0 if a > b else 0.0 if a < b else 0.5
+    if rule == "size":  # "the file whose size the prefix's ls -l showed is real"
+        ps, sr, so = row.get("prefix_size"), row.get("size_real"), row.get("size_other")
+        if ps is None or sr is None or so is None:
+            return 0.5
+        return 1.0 if (sr == ps) and (so != ps) else 0.0 if (so == ps) and (sr != ps) else 0.5
+    raise ValueError(rule)
+
+
+def baselines(rows: list[dict]) -> dict:
+    """Per comparison: accuracy of "longer is real" and "size matches the prefix's ls -l"."""
+    out = {}
+    for comp in sorted({r["comparison"] for r in rows} - {RETEST, CONSISTENCY}):
+        mine = [r for r in rows if r["comparison"] == comp]
+        entry = {"n": len(mine)}
+        for rule in ("longer", "size"):
+            sc = [x for x in (_baseline_score(r, rule) for r in mine) if x is not None]
+            entry[rule] = float(np.mean(sc)) if sc else float("nan")
+        out[comp] = entry
+    return out
+
+
+def strata(rows: list[dict]) -> dict:
+    """Haiku's balanced accuracy per comparison within ``prefix_shows_size`` x ``size_matched``."""
+    out = {}
+    for comp in sorted({r["comparison"] for r in rows} - {RETEST, CONSISTENCY}):
+        for shows in (True, False):
+            for matched in (True, False):
+                mine = [r for r in rows if r["comparison"] == comp
+                        and bool(r.get("prefix_shows_size")) == shows and r.get("size_matched") is matched]
+                if mine:
+                    out[f"{comp}|prefix_shows_size={shows}|size_matched={matched}"] = {
+                        "n": len(mine), "acc": balanced_accuracy(mine)}
+    return out
 
 
 # ------------------------------------------------------------------ surface baseline
@@ -400,7 +515,7 @@ def _fit_logistic(x: np.ndarray, y: np.ndarray, l2: float = 1.0) -> np.ndarray:
 def surface_baseline(rows: list[dict]) -> dict:
     """Leave-one-task-out logistic model per comparison: balanced accuracy of its picks."""
     out = {}
-    for comp in sorted({r["comparison"] for r in rows} - {RETEST}):
+    for comp in sorted({r["comparison"] for r in rows} - {RETEST, CONSISTENCY}):
         mine = [r for r in rows if r["comparison"] == comp]
         tasks = sorted({r["task_id"] for r in mine})
         if len(tasks) < 2:
@@ -439,6 +554,7 @@ def discriminate(root: Path, caller, events_path: Path | None = None,
     items, skipped = build_items(slots, events, read_jsonl(root / "sims.jsonl"))
     rows = run(items, caller, root / "discriminator.jsonl")
     return {"summary": summarise(rows), "surface": surface_baseline(rows), "retest": retest_summary(rows),
+            "baselines": baselines(rows), "strata": strata(rows),
             "skipped": skipped,
             "template_sha256": template_sha256(), "n_items": len(items)}
 

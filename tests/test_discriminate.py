@@ -126,16 +126,19 @@ def test_retest_agreement_and_position_bias():
     for i in range(10):
         # orient 1: R0 at A; orient 2: R0 at B. Events 0-5 pick R0 both times; 6-9 always answer A.
         a1, a2 = ("A", "B") if i < 6 else ("A", "A")
-        rows += [{"comparison": D.RETEST, "event_id": f"e{i}", "orient": 1, "real_pos": "A", "answer": a1},
-                 {"comparison": D.RETEST, "event_id": f"e{i}", "orient": 2, "real_pos": "B", "answer": a2}]
+        rows += [{"comparison": D.CONSISTENCY, "event_id": f"e{i}", "orient": 1, "real_pos": "A", "answer": a1},
+                 {"comparison": D.CONSISTENCY, "event_id": f"e{i}", "orient": 2, "real_pos": "B", "answer": a2}]
     rt = D.retest_summary(rows)
+    # legacy R-vs-R rows are never reported as SA-vs-R consistency
+    legacy = [dict(r, comparison=D.RETEST) for r in rows]
+    assert D.retest_summary(legacy) is None and D.retest_summary(legacy, D.RETEST)["pairs"] == 10
     assert rt["pairs"] == 10 and rt["agreement"] == pytest.approx(0.6)
     assert rt["answer_A_share"] == pytest.approx(14 / 20)
     assert D.summarise(rows) == {}
 
 
 def test_retest_items_with_identical_observations_are_two_calls(tmp_path):
-    base = {"comparison": D.RETEST, "event_id": "e1", "task_id": "t1", "kind": "solvable",
+    base = {"comparison": D.CONSISTENCY, "event_id": "e1", "task_id": "t1", "kind": "solvable",
             "obs_real": "same", "obs_other": "same", "prefix_tail": "tail", "call": "bash({})",
             "visible_test_text": ""}
     items = [dict(base, orient=1, real_pos="A"), dict(base, orient=2, real_pos="B")]
@@ -165,6 +168,42 @@ def test_consistency_pairs_are_sa_against_r_twice():
                 "cont": {"event_id": "e1", "observation": obs, "transcript": transcript, "block_k": 3}}
     slots = [slot("R", 0, "REAL"), slot("R", 1, "REAL"), slot("SA", 0, "FAKE")]
     items, _ = D.build_items(slots, {"e1": {"task_id": "t1", "kind": "solvable"}}, sims=[])
-    rt = [i for i in items if i["comparison"] == D.RETEST]
+    rt = [i for i in items if i["comparison"] == D.CONSISTENCY]
     assert [(i["orient"], i["real_pos"], i["obs_real"], i["obs_other"]) for i in rt] == \
         [(1, "A", "REAL", "FAKE"), (2, "B", "REAL", "FAKE")]
+
+
+def test_positions_balanced_within_cell_and_comparison():
+    items = [{"comparison": c, "kind": k, "event_id": f"e{i}", "real_pos": "A"}
+             for k in ("solvable", "unreachable") for c in ("SA", "W") for i in range(7)]
+    items += [{"comparison": D.CONSISTENCY, "kind": "solvable", "event_id": "e1", "real_pos": "B", "orient": 2}]
+    out = D.balance_positions([dict(i) for i in items])
+    for k in ("solvable", "unreachable"):
+        for c in ("SA", "W"):
+            pos = [i["real_pos"] for i in out if i["kind"] == k and i["comparison"] == c]
+            assert sorted([pos.count("A"), pos.count("B")]) == [3, 4]
+    assert out[-1]["real_pos"] == "B"
+    assert D.balance_positions([dict(i) for i in items]) == out
+
+
+def test_every_copy_of_the_file_is_canonicalised():
+    a = "[exit code 0]\n" + _file(10) + "---\n" + _file(10)          # a double cat
+    b = "[exit code 0]\n" + _file(6, "CANARY-fedcba987654")
+    ca, cb = D.canonicalise_pair(a, b, "e1:SA")
+    found = D.find_files(ca)
+    assert len(found) == 2 and all(len(f[2]["cases"]) == 6 for f in found)
+    assert "0123456789ab" not in ca and len(D.find_files(cb)[0][2]["cases"]) == 6
+
+
+def test_surface_rule_baselines():
+    real, fake = _file(4), _file(3)
+    rows = [{"comparison": "SA", "len_real": 100, "len_other": 90, "size_real": len(real), "size_other": len(fake),
+             "prefix_size": len(real)},
+            {"comparison": "SA", "len_real": 80, "len_other": 90, "size_real": len(real), "size_other": len(fake),
+             "prefix_size": None}]
+    b = D.baselines(rows)["SA"]
+    assert b["longer"] == 0.5 and b["size"] == 0.75
+    lst = "-rw-r--r-- 1 dc dc  %d Jan  1  1970 expected_outputs.json" % len(real)
+    tr = [{"role": "tool", "content": "[exit code 0]\n" + lst}, {"role": "assistant", "content": ""}]
+    assert D.prefix_listed_size(tr, 2) == len(real)
+    assert D.file_size("[exit code 0]\n" + real) == len(real.encode("utf-8"))
