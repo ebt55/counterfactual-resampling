@@ -18,8 +18,8 @@ import json
 from collections.abc import Iterator
 from pathlib import Path
 
-from blockpoint import KM_ROOT
-from blockpoint.constants import BATCHES, RUN_LINE, SEEDS
+from rab import KM_ROOT
+from rab.constants import BATCHES, RUN_LINE, SEEDS
 from harness.batch import IMPOSSIBLE_DIR, make_batch_id
 
 RUNS_DIR = KM_ROOT / "results" / "runs"

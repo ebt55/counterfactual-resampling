@@ -1,9 +1,9 @@
 """Event selection: the block points of the pilot (build guide §2).
 
-Run as ``uv run python -m blockpoint.select`` (not by file path: a script named
+Run as ``uv run python -m rab.select`` (not by file path: a script named
 ``select.py`` on ``sys.path[0]`` would shadow the stdlib ``select`` module). It reads
 every record of the 60 KM runs ``dsv41flash-sal-v2_baseline_I{0,2,4,8,15}_s{0..11}``
-(:func:`blockpoint.km.iter_line_records`; the ``-nonotes`` line is never read) and
+(:func:`rab.km.iter_line_records`; the ``-nonotes`` line is never read) and
 writes ``data/events.jsonl`` and ``data/events_recount.json`` deterministically
 (sorted keys, ``ensure_ascii=False``, LF, newline-terminated), so a re-run is
 byte-identical.
@@ -46,7 +46,7 @@ Fields of each line of ``data/events.jsonl``
     names on Windows.
 ``run_id``
     The KM run (batch) directory, ``record["batch_id"]``;
-    ``blockpoint.km.load_record(run_id, position)`` returns the record. (KM's own
+    ``rab.km.load_record(run_id, position)`` returns the record. (KM's own
     ``record["run_id"]`` is ``f"{batch_id}/{position}"``.)
 ``position``
     ``record["position"]``, 0-based; the v2 work dir is ``/work/item_{position:02d}``.
@@ -134,8 +134,8 @@ from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
 
-from blockpoint import REPO_ROOT, km
-from blockpoint.constants import (
+from rab import REPO_ROOT, km
+from rab.constants import (
     ANSWER_FILE,
     BATCHES,
     COMBINED_THRESHOLD,
@@ -545,7 +545,7 @@ def select(records: Iterable[dict] | None = None) -> tuple[list[dict], dict]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="blockpoint.select", description=__doc__.split("\n")[0])
+    p = argparse.ArgumentParser(prog="rab.select", description=__doc__.split("\n")[0])
     p.add_argument("--out-dir", type=Path, default=DATA_DIR)
     args = p.parse_args(argv)
     drawn, recount = select()

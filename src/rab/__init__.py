@@ -1,4 +1,4 @@
-"""blockpoint: the block-point swap resampling pilot (build guide section 10).
+"""rab (resample-at-block): the block-point swap resampling pilot (build guide section 10).
 
 Importing this package does two things and nothing else:
 
@@ -19,7 +19,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-#: This repository's root (``src/blockpoint/__init__.py`` is two levels below it).
+#: This repository's root (``src/rab/__init__.py`` is two levels below it).
 REPO_ROOT: Path = Path(__file__).resolve().parents[2]
 
 load_dotenv(REPO_ROOT / ".env", override=False)

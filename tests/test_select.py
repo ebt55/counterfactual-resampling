@@ -11,9 +11,9 @@ import random
 
 import pytest
 
-from blockpoint import km
-from blockpoint import select as sel
-from blockpoint.constants import GRADER_ANSWER_PATH, KINDS, N_PER_KIND, RUN_LINE, SEED
+from rab import km
+from rab import select as sel
+from rab.constants import GRADER_ANSWER_PATH, KINDS, N_PER_KIND, RUN_LINE, SEED
 
 FIELDS = {
     "event_id", "run_id", "position", "task_id", "item_key", "kind", "draw_seed", "i", "k", "a",

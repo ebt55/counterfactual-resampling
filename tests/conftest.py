@@ -1,7 +1,7 @@
 """Shared test setup: put the KM checkout on ``sys.path`` (guide §10).
 
-Mirrors ``blockpoint/__init__.py`` (same ``.env``, same default) so KM modules import
-even before ``blockpoint`` does. Never reads ``$KM_ROOT/.env``.
+Mirrors ``rab/__init__.py`` (same ``.env``, same default) so KM modules import
+even before ``rab`` does. Never reads ``$KM_ROOT/.env``.
 """
 
 from __future__ import annotations
@@ -25,9 +25,9 @@ if str(KM_ROOT) not in sys.path:
 
 @pytest.fixture(scope="session")
 def km_root() -> Path:
-    """The KM checkout the package resolved (same rule as ``blockpoint.KM_ROOT``)."""
-    import blockpoint
+    """The KM checkout the package resolved (same rule as ``rab.KM_ROOT``)."""
+    import rab
 
-    assert blockpoint.KM_ROOT == KM_ROOT, (blockpoint.KM_ROOT, KM_ROOT)
+    assert rab.KM_ROOT == KM_ROOT, (rab.KM_ROOT, KM_ROOT)
     assert (KM_ROOT / "harness" / "records.py").is_file(), KM_ROOT
     return KM_ROOT
