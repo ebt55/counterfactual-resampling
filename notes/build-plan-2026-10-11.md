@@ -1,4 +1,4 @@
-# resample-at-block: build plan (11 Oct 2026)
+# counterfactual-resampling: build plan (11 Oct 2026)
 
 Orchestration plan for building the resampling pilot from
 `C:\Users\ebin\claude-ground\profile-update-oct2026\project-plan-2026-10-09\07-BUILD-GUIDE-resampling-pilot.md`
@@ -22,8 +22,8 @@ KM records with one command per step.
 ## Shared conventions (binding for every chunk)
 
 - **Repo**: `C:\Users\ebin\claude-ground\counterfactual-resampling` is the repo
-  root; GitHub name `resample-at-block` (owner `ebt55`). MIT. Decided after
-  review: "resample" is the readers' own word (Redwood's Ctrl-Z resampling,
+  root; GitHub name `counterfactual-resampling` (owner `ebt55`; chosen by Ebin on 11 Oct, replacing
+  `resample-at-block`). MIT. "Resampling" is the readers' own word (Redwood's Ctrl-Z resampling,
   OpenAI's "tool-resampling realism"), and the slug has to say what the thing
   does in a link preview. Runner-up: `blockpoint`.
 - **Package**: `src/rab/`, imported as `rab`, exactly as the guide writes it.

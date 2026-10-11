@@ -1,4 +1,4 @@
-# Preregistration: a simulated answer file at the agent's first read
+# counterfactual-resampling: preregistration
 
 [EBIN: the question in one sentence]
 

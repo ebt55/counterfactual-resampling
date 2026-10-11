@@ -1,4 +1,4 @@
-"""rab (resample-at-block): the block-point swap resampling pilot (build guide section 10).
+"""rab (repo counterfactual-resampling): the block-point swap resampling pilot (build guide section 10).
 
 Importing this package does two things and nothing else:
 

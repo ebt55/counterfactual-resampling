@@ -1,5 +1,5 @@
 [project]
-name = "resample-at-block"
+name = "counterfactual-resampling"
 version = "0.1.0"
 description = "Block-point swap: resample a DeepSeek-V4.1-flash agent at its first answer-file read, with the real file or a fake from another model family."
 license = { text = "MIT" }
