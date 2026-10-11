@@ -271,3 +271,27 @@ def test_fixture_replay_matches() -> None:
     names = subprocess.run(["docker", "ps", "-a", "--format", "{{.Names}}"],
                            capture_output=True, text=True, check=False).stdout.split()
     assert name not in names, f"container {name} was not removed"
+
+
+@pytest.mark.docker
+def test_tmp_trace_only_after_position_zero() -> None:
+    from harness.sandbox import docker_available, image_available
+
+    from rab.prefix import TMP_TRACE_NOTE
+
+    if not docker_available() or not image_available():
+        pytest.skip("Docker or dosecurve-sandbox:latest is not available")
+    rec, event = _fixture()
+    assert rec["position"] >= 1
+    # position >= 1: the previous item's grading left /tmp copied up (link count 1), empty
+    with replay(rec, event) as res:
+        assert TMP_TRACE_NOTE in res.notes and not res.failures and res.ok
+        out = res.sandbox.exec(res.item_key, "ls -ld /tmp; ls -A /tmp | wc -l").output.split("\n")
+        assert out[0].startswith("drwxrwxrwt 1 "), out
+        assert out[1].strip() == "0", out
+    # position 0: no previous item, /tmp stays pristine (link count 2), no note
+    rec0, ev0 = dict(rec, position=0), dict(event, position=0, i=0)
+    with replay(rec0, ev0) as res:
+        assert TMP_TRACE_NOTE not in res.notes and res.ok
+        out = res.sandbox.exec(res.item_key, "ls -ld /tmp").output
+        assert out.startswith("drwxrwxrwt 2 "), out

@@ -89,6 +89,15 @@ REPLAY_REPORT = REPO_ROOT / "results" / "replay_check.md"
 NAME_PREFIX = "rab_"
 EXCERPT_CHARS = 200
 
+#: KM runs a whole batch in one container and ends every item with ``hidden_grade``
+#: (pytest), which creates and deletes a temp file in ``/tmp``. overlayfs then reports
+#: the copied-up ``/tmp`` with link count 1 for the rest of the batch, where a fresh
+#: container shows 2 (checked: 2 after ``prepare_item``, 1 after one ``run_visible_tests``).
+#: For an event at position 1 or later the replay therefore creates and deletes one temp
+#: file in ``/tmp`` as the sandbox user before the prefix: the same trace, nothing left.
+TMP_TRACE_CMD = "python -c 'import tempfile; tempfile.TemporaryFile().close()'"
+TMP_TRACE_NOTE = "previous item's /tmp trace reproduced (temp file created and deleted)"
+
 
 # ------------------------------------------------------------------ messages
 
@@ -293,7 +302,8 @@ class Replay:
     event_id: str = ""
     replayed: list[str] = field(default_factory=list)   # raw replayed outputs, by index
     work_listing: str = ""                             # `ls -ld /work` after the touch
-    notes: list[str] = field(default_factory=list)     # e.g. a failed touch
+    notes: list[str] = field(default_factory=list)     # steps taken (the /tmp trace) and failures
+    failures: list[str] = field(default_factory=list)  # a failed /tmp trace or touch; ok is false
 
     @property
     def first_failure(self) -> CallDiff | None:
@@ -331,6 +341,9 @@ def replay(rec: dict, event: dict, sandbox: DockerSandbox | None = None, *,
     2. ``prepare_item(item_key, task_dir, arm="baseline", env_variant="salient",
        position=rec["position"])``: the work dir is ``/work/item_NN``; ``task_dir`` is
        ``tasks/<item_key>`` (solvable) or ``tasks/impossible/<item_key>``.
+    2b. For ``position >= 1``: :data:`TMP_TRACE_CMD`, which reproduces the trace the
+       previous item's grading left in the batch container (see its comment), with a
+       ``notes`` entry. Position 0 had no previous item, so ``/tmp`` stays pristine.
     3. Each ``rec["tool_calls"][:event["i"]]`` through ``ToolExecutor.run(tool, input)``
        with the record's ``bash_timeout_s`` (60) and ``tool_output_limit`` (8000), so
        KM's own truncation applies; each call is compared strictly and by content
@@ -361,6 +374,14 @@ def replay(rec: dict, event: dict, sandbox: DockerSandbox | None = None, *,
         sandbox.start()
         sandbox.prepare_item(item_key, tdir, arm="baseline", env_variant="salient",
                              position=position)
+        notes: list[str] = []
+        failures: list[str] = []
+        if position >= 1:
+            res = sandbox.exec(item_key, TMP_TRACE_CMD)
+            if res.exit_code == 0:
+                notes.append(TMP_TRACE_NOTE)
+            else:
+                failures.append(f"/tmp trace failed: {res.output.strip()[:200]}")
         executor = ToolExecutor(sandbox, item_key, int(mc["bash_timeout_s"]),
                                 int(mc["tool_output_limit"]))
         calls: list[CallDiff] = []
@@ -376,19 +397,18 @@ def replay(rec: dict, event: dict, sandbox: DockerSandbox | None = None, *,
                 "" if same_flag else f"truncated flag: recorded {call['truncated']}, replayed {truncated}")
             calls.append(CallDiff(idx, call["tool"], matched, content, excerpt))
 
-        notes: list[str] = []
         listing = ""
         work_mtime = event.get("work_mtime")
         if work_mtime:
             res = sandbox.exec(item_key, f"touch -d {shlex.quote(str(work_mtime))} /work && ls -ld /work")
             listing = res.output.strip()
             if res.exit_code != 0:
-                notes.append(f"touch -d {work_mtime!r} /work failed: {listing[:200]}")
-        ok = all(c.content_matched for c in calls) and not notes
-        strict_ok = all(c.matched for c in calls) and not notes
+                failures.append(f"touch -d {work_mtime!r} /work failed: {listing[:200]}")
+        ok = all(c.content_matched for c in calls) and not failures
+        strict_ok = all(c.matched for c in calls) and not failures
         return Replay(sandbox, item_key, tdir, sandbox.batch_id, calls, ok, strict_ok,
                       event_id=event["event_id"], replayed=outputs, work_listing=listing,
-                      notes=notes)
+                      notes=notes + failures, failures=failures)
     except BaseException:
         if own:
             sandbox.close()
@@ -518,9 +538,9 @@ def replay_one(ev: dict) -> dict:
             row["failed_calls"].append({"index": c.index, "name": c.tool, "class": label,
                                         "content_matched": c.content_matched,
                                         "excerpt": c.diff_excerpt})
-        if res.notes:
-            row["failed_calls"].append({"index": "touch", "name": "", "class": "host-side touch",
-                                        "content_matched": False, "excerpt": "; ".join(res.notes)})
+        if res.failures:
+            row["failed_calls"].append({"index": "touch", "name": "", "class": "host-side step (/tmp trace or touch)",
+                                        "content_matched": False, "excerpt": "; ".join(res.failures)})
     except Exception as exc:  # recorded, never fatal to the check or the sweep
         row["error"] = f"{type(exc).__name__}: {exc}"
         row["failed_calls"].append({"index": "-", "name": "", "class": "replay error",
@@ -606,8 +626,9 @@ def sweep(out_path: Path = SWEEP_PATH, events: list[dict] | None = None) -> dict
                         "excluded": sorted(k for k, v in mine.items() if not v["ok"])}
     doc = {"image": _image_id(IMAGE), "generated": _utc_now(),
            "seconds": round(time.time() - t_all, 1),
-           "rule": "ok = every prefix call content_equal (rab.prefix) and the /work touch "
-                   "succeeded; strict_ok = every call equal after normalise",
+           "rule": "replay reproduces the previous item's /tmp trace at position >= 1; "
+                   "ok = every prefix call content_equal (rab.prefix) and the host-side "
+                   "steps succeeded; strict_ok = every call equal after normalise",
            "events": entries, "totals": totals}
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(doc, sort_keys=True, indent=1, ensure_ascii=False) + "\n",

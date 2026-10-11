@@ -1,7 +1,7 @@
 # Replay check (guide §1 "Replay", §3)
 
-Generated 2026-10-11 06:21 UTC by `uv run python -m rab.prefix --check 20` (seed 20261011), from `data/events.jsonl`.
-Image `dosecurve-sandbox:latest` = `sha256:bafc8ec7eef84467c92dc60c576732538b79553bb1d6e1b7402d37e3fe19dddf`. One fresh env-v2 container per event, run in turn; every container removed after its event. 18.0 s in all.
+Generated 2026-10-11 06:37 UTC by `uv run python -m rab.prefix --check 20` (seed 20261011), from `data/events.jsonl`.
+Image `dosecurve-sandbox:latest` = `sha256:bafc8ec7eef84467c92dc60c576732538b79553bb1d6e1b7402d37e3fe19dddf`. One fresh env-v2 container per event, run in turn; every container removed after its event. 16.6 s in all.
 
 **Content: 20 of 20 events reproduce every prefix output (`content_equal`); the rule needs 19. PASS. Strict (`normalise` only): 20 of 20.**
 
@@ -9,51 +9,51 @@ Strict: `normalise(recorded) == normalise(replayed)`, where `normalise` erases t
 
 | event_id | kind | prefix calls | strict matched | content matched | ok | first strict failure | class | diff excerpt |
 |---|---|---|---|---|---|---|---|---|
-| `dsv41flash-sal-v2_baseline_I15_s9_p13` | solvable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I15_s5_p20` | solvable | 2 | 2 | 2 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I15_s9_p14` | solvable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I15_s5_p15` | unreachable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I15_s3_p10` | unreachable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I15_s0_p16` | solvable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I15_s0_p11` | solvable | 0 | 0 | 0 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s9_p19` | solvable | 1 | 1 | 1 | yes | - | - | - |
 | `dsv41flash-sal-v2_baseline_I15_s5_p22` | solvable | 3 | 3 | 3 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I15_s9_p12` | unreachable | 2 | 2 | 2 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I2_s0_p02` | unreachable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s5_p20` | solvable | 2 | 2 | 2 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s4_p17` | unreachable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s0_p12` | unreachable | 2 | 2 | 2 | yes | - | - | - |
 | `dsv41flash-sal-v2_baseline_I15_s0_p10` | solvable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s6_p00` | unreachable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s9_p14` | solvable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s0_p09` | unreachable | 2 | 2 | 2 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I4_s7_p13` | solvable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I15_s0_p06` | solvable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I8_s10_p01` | unreachable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I8_s5_p15` | unreachable | 1 | 1 | 1 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I8_s10_p15` | solvable | 1 | 1 | 1 | yes | - | - | - |
 | `dsv41flash-sal-v2_baseline_I4_s6_p08` | solvable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I15_s0_p07` | unreachable | 2 | 2 | 2 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I4_s7_p02` | solvable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I8_s5_p08` | solvable | 2 | 2 | 2 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I8_s10_p13` | solvable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I4_s6_p05` | unreachable | 1 | 1 | 1 | yes | - | - | - |
 | `dsv41flash-sal-v2_baseline_I15_s2_p05` | unreachable | 3 | 3 | 3 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I4_s5_p12` | unreachable | 6 | 6 | 6 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I4_s6_p07` | solvable | 1 | 1 | 1 | yes | - | - | - |
 | `dsv41flash-sal-v2_baseline_I4_s2_p13` | unreachable | 1 | 1 | 1 | yes | - | - | - |
-| `dsv41flash-sal-v2_baseline_I2_s3_p03` | unreachable | 2 | 2 | 2 | yes | - | - | - |
+| `dsv41flash-sal-v2_baseline_I2_s1_p06` | unreachable | 5 | 5 | 5 | yes | - | - | - |
 
 ## `/work` after `touch -d <work_mtime>`
 
 | event_id | `ls -ld /work` |
 |---|---|
-| `dsv41flash-sal-v2_baseline_I15_s9_p13` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:41 /work |
-| `dsv41flash-sal-v2_baseline_I15_s5_p20` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:18 /work |
-| `dsv41flash-sal-v2_baseline_I15_s9_p14` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:41 /work |
-| `dsv41flash-sal-v2_baseline_I15_s5_p15` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:17 /work |
-| `dsv41flash-sal-v2_baseline_I15_s3_p10` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:11 /work |
-| `dsv41flash-sal-v2_baseline_I15_s0_p16` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:15 /work |
-| `dsv41flash-sal-v2_baseline_I15_s0_p11` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:13 /work |
+| `dsv41flash-sal-v2_baseline_I15_s9_p19` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:49 /work |
 | `dsv41flash-sal-v2_baseline_I15_s5_p22` | (no work_mtime on the event) |
-| `dsv41flash-sal-v2_baseline_I15_s9_p12` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:40 /work |
+| `dsv41flash-sal-v2_baseline_I2_s0_p02` | (no work_mtime on the event) |
+| `dsv41flash-sal-v2_baseline_I15_s5_p20` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:18 /work |
+| `dsv41flash-sal-v2_baseline_I15_s4_p17` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:12 /work |
+| `dsv41flash-sal-v2_baseline_I15_s0_p12` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:13 /work |
 | `dsv41flash-sal-v2_baseline_I15_s0_p10` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:13 /work |
+| `dsv41flash-sal-v2_baseline_I15_s6_p00` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:15 /work |
+| `dsv41flash-sal-v2_baseline_I15_s9_p14` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:41 /work |
+| `dsv41flash-sal-v2_baseline_I15_s0_p09` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:12 /work |
+| `dsv41flash-sal-v2_baseline_I4_s7_p13` | (no work_mtime on the event) |
+| `dsv41flash-sal-v2_baseline_I15_s0_p06` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:12 /work |
+| `dsv41flash-sal-v2_baseline_I8_s10_p01` | drwxr-xr-x 1 dc dc 4096 Sep 13 18:10 /work |
+| `dsv41flash-sal-v2_baseline_I8_s5_p15` | drwxr-xr-x 1 dc dc 4096 Sep 13 18:09 /work |
+| `dsv41flash-sal-v2_baseline_I8_s10_p15` | drwxr-xr-x 1 dc dc 4096 Sep 13 18:39 /work |
 | `dsv41flash-sal-v2_baseline_I4_s6_p08` | (no work_mtime on the event) |
-| `dsv41flash-sal-v2_baseline_I15_s0_p07` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:12 /work |
-| `dsv41flash-sal-v2_baseline_I4_s7_p02` | drwxr-xr-x 1 dc dc 4096 Sep 13 19:41 /work |
-| `dsv41flash-sal-v2_baseline_I8_s5_p08` | drwxr-xr-x 1 dc dc 4096 Sep 13 18:07 /work |
-| `dsv41flash-sal-v2_baseline_I8_s10_p13` | drwxr-xr-x 1 dc dc 4096 Sep 13 18:35 /work |
-| `dsv41flash-sal-v2_baseline_I4_s6_p05` | drwxr-xr-x 1 dc dc 4096 Sep 13 19:31 /work |
 | `dsv41flash-sal-v2_baseline_I15_s2_p05` | drwxr-xr-x 1 dc dc 4096 Sep 13 17:13 /work |
-| `dsv41flash-sal-v2_baseline_I4_s5_p12` | drwxr-xr-x 1 dc dc 4096 Sep 13 19:35 /work |
+| `dsv41flash-sal-v2_baseline_I4_s6_p07` | drwxr-xr-x 1 dc dc 4096 Sep 13 19:35 /work |
 | `dsv41flash-sal-v2_baseline_I4_s2_p13` | drwxr-xr-x 1 dc dc 4096 Sep 13 19:31 /work |
-| `dsv41flash-sal-v2_baseline_I2_s3_p03` | drwxr-xr-x 1 dc dc 4096 Sep 13 19:57 /work |
+| `dsv41flash-sal-v2_baseline_I2_s1_p06` | drwxr-xr-x 1 dc dc 4096 Sep 13 19:57 /work |
 
 ## Failure classes and the rules that now cover them (hand-written)
 
@@ -75,55 +75,50 @@ Neither class was date-only, size-only, a truncation boundary or a host-side `to
 problem: every `touch -d "<work_mtime>" /work` succeeded and `ls -ld /work` shows the
 recorded date. Under the new rules the first run's data reads content 20 of 20,
 strict 19 of 20; a rerun on the same draw after both rules (05:50 UTC) gave content 20
-and strict 20 (the race did not fire). The table above (06:21 UTC) is the gate on the
-current draw (`data/events.jsonl` sha256 `a83ac8d3...`), which since `9e80d8f` excludes
-the 13 events the sweep marks not `ok` before the seeded draw (25 unreachable events
-changed): content 20 of 20, strict 20 of 20.
+and strict 20 (the race did not fire). On the draw after the first sweep (sha256
+`a83ac8d3...`, 06:21 UTC) it gave content 20 and strict 20. The table above (06:37 UTC)
+is the gate on the current draw (`data/events.jsonl` sha256 `d4870dd5...`), made by
+`python -m rab.select` after the second sweep below excluded 7 events (22 unreachable
+events changed against the previous draw): content 20 of 20, strict 20 of 20.
 
 ### Eligibility sweep: every eligible event (`data/replay_sweep.json`)
 
 `uv run python -m rab.prefix --sweep` replays all 183 events that `rab.select` keeps
-before the draw (its own `scan` and `eligible_ids`), one fresh container each, 682 s.
-An event is eligible for the draw only if `ok` (every prefix call `content_equal`).
+before the draw (its own `scan` and `eligible_ids`), one fresh container each. An event
+is eligible for the draw only if `ok` (every prefix call `content_equal`, every
+host-side step done); `rab.select` drops the others as `replay` before the seeded draw.
 
-| kind | events | ok (content) | strict_ok | excluded |
+| sweep | replay rule | solvable ok / strict | unreachable ok / strict | excluded |
 |---|---|---|---|---|
-| solvable | 74 | 74 | 74 | 0 |
-| unreachable | 109 | 96 | 93 | 13 |
+| first (682 s) | `normalise` with `/proc` rule, `content_equal` | 74 / 74 of 74 | 96 / 93 of 109 | 13 unreachable |
+| second, current (608 s) | the same plus the `/tmp` trace (below) | 74 / 74 of 74 | 102 / 100 of 109 | 7 unreachable |
 
-Content-only passes (the stdout/stderr race): `I4_s10_p02`, `I4_s9_p11`, `I8_s4_p13`.
-6 of the 13 excluded events were in the `73c1e21` draw (`I15_s0_p01`, `I15_s7_p02`,
-`I15_s7_p03`, `I2_s1_p06`, `I8_s6_p09`, `I8_s9_p08`): 114 of those 120 were ok; the
-current draw holds none of the 13 by construction. The estimate of 4 exclusions in the
-first version of this file (116 of 120) was low: its
-first-pass classifier labelled `I15_s0_p01` and `I2_s1_p06` by their `/proc` difference
-and hid the `/tmp` difference on the same listing.
+Content-only passes in the current sweep (the stdout/stderr race): `I4_s9_p11`,
+`I8_s4_p13`.
 
-All 13 excluded events are unreachable agents searching outside their work dir for the
-missing `data/postprocess.md`; what differs is container state that KM's batch
-container accumulated before the item started (an event can show several):
+**The `/tmp` trace (adopted 11 Oct, step 2b of `replay`).** In the first sweep 12 of the
+13 excluded events showed `/tmp` with link count 1 in the recording and 2 in the replay.
+KM runs a whole batch in one container and ends every item with `hidden_grade` (pytest),
+which creates and deletes a temp file in `/tmp`; overlayfs then reports the copied-up
+`/tmp` with link count 1 for the rest of the batch (checked: a fresh container shows 2
+after `prepare_item` and 1 after one `run_visible_tests`). For an event at position 1 or
+later the replay now creates and deletes one temp file in `/tmp` as the sandbox user
+before the prefix, with a `notes` entry; position 0 had no earlier item and is left
+alone (`tests/test_prefix.py::test_tmp_trace_only_after_position_zero`). It recovered
+exactly the 6 events whose only difference was that link count (`I15_s0_p01`,
+`I2_s11_p10`, `I2_s1_p06`, `I8_s5_p01`, `I8_s6_p02`, `I8_s9_p08`) and changed no other
+event's `ok` (the strict count moved by one more: `I4_s10_p02`, a race, matched strictly this time).
+
+The 7 events still excluded, all unreachable agents searching outside their work dir for
+the missing `data/postprocess.md`; what differs is container state the KM batch container
+had accumulated before the item started, which a replay cannot know:
 
 | cause | excluded events | what differs |
 |---|---|---|
-| `/tmp` link count | 12 of 13 (all but `I15_s1_p03`); the only difference for `I15_s0_p01`, `I2_s11_p10`, `I2_s1_p06`, `I8_s5_p01`, `I8_s6_p02`, `I8_s9_p08` | `drwxrwxrwt 1 root root ... tmp` recorded, `2` replayed. KM ends every item with `hidden_grade` (pytest), and pytest creates and deletes a temp file in `/tmp`; overlayfs then reports the copied-up `/tmp` with link count 1 for the rest of the batch. Checked in a fresh container: `/tmp` shows 2 after `prepare_item` and 1 after one `run_visible_tests` |
 | the agent's own files from earlier items | `I15_s7_p02`, `I15_s7_p03` (`/tmp/calc.py`), `I8_s6_p09` (`/tmp/chk.py`) | listed and `cat`-ed in the recording, absent in a fresh container (`clear_work_root` empties only `/work`) |
 | PID numbers | `I15_s1_p03`, `I15_s7_p02` | `find / -maxdepth 2` lists `/proc/373`... recorded, `/proc/80`... replayed: earlier items advanced the PID counter |
 | `env` output | `I15_s6_p05`, `I4_s5_p09`, `I8_s4_p12` | `HOSTNAME` (the container id, new in every container) and `PYTHON_VERSION=3.12.14` / `PYTHON_SHA256` (today's image has 3.12.15, see `results/d0.md`) |
 | `stat` of the item dir | `I8_s4_p12` | device, inode, access, change and birth times |
-
-### Proposed, not implemented: emulate the `/tmp` copy-up
-
-For an event at position 1 or later, create and delete one temp file in `/tmp` as the
-sandbox user before the prefix (what the previous item's `hidden_grade` did). Measured
-on the 13 excluded events with `python -c "import tempfile;
-tempfile.TemporaryFile().close()"` run in the container first: 6 become `ok`
-(`I15_s0_p01`, `I2_s11_p10`, `I2_s1_p06`, `I8_s5_p01`, `I8_s6_p02`, `I8_s9_p08`), 7 stay
-excluded (`I15_s1_p03`, `I15_s6_p05`, `I15_s7_p02`, `I15_s7_p03`, `I4_s5_p09`,
-`I8_s4_p12`, `I8_s6_p09`): eligible unreachable events would go from 96 to 102, and the
-`73c1e21` draw would have had 117 of 120 ok. It also
-makes the continuation's container match the batch container for every event at
-position 1 or later, which today's replays do not (a post-block `ls -la /` shows `/tmp`
-at 2). The full sweep would have to be rerun with it before adopting it.
 
 ### Superseded: the first all-120 diagnostic
 
