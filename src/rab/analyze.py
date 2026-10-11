@@ -17,10 +17,11 @@ Per cell (solvable, unreachable), every arm against R, errors excluded:
   and centred on its permutation-null mean; p from a within-event permutation of arm
   labels (:data:`N_PERM`, seeded); interval from an event bootstrap (:data:`N_BOOT`). Holm
   across the two cells. Leave-one-task-out p for every task.
-* **Verdict** (:func:`verdict`): ``positive`` when the Holm-adjusted p < 0.05 and every
-  leave-one-task-out p < 0.05; ``bounded null`` when every non-error class share's 90%
-  interval of SA − R lies inside ±10 points (TOST); else ``inconclusive``. The control
-  (R − P regrade gap, TVD(B, R) against its null) is reported beside it.
+* **Verdict** (:func:`verdict`, protocol §9 and §12): ``control failed`` when the control
+  (R − P regrade gap, TVD(B, R) against its null) fails; ``positive`` when the
+  Holm-adjusted p < 0.05 and every leave-one-task-out p < 0.05 (``inconclusive`` if only
+  the first holds); ``bounded null`` when Holm p ≥ 0.05 and every non-error class share's
+  90% interval of SA − R lies inside ±10 points (TOST); else ``inconclusive``.
 * **Sign flip** on the leading class fixed in advance (:data:`LEADING_CLASS`).
 * **Sensitivity**: equal n averaged over all 35 four-of-eight R splits; without
   size-visible runs; event-standardised shares; errors and failed slots as own classes.
@@ -610,17 +611,22 @@ def control(analysis: dict) -> dict:
 
 
 def verdict(analysis: dict) -> dict[str, str]:
-    """Per cell, first rule wins: ``positive`` (Holm-adjusted permutation p < 0.05 and the
-    leave-one-task-out p < 0.05 with every task removed), ``bounded null`` (TOST: every
-    non-error class share's 90% interval of SA − R inside ±10 points), else
-    ``inconclusive``. The control is reported beside it (:func:`control`)."""
+    """Per cell, protocol §9 and §12, first rule wins: ``control failed`` (:func:`control`);
+    ``positive`` (Holm-adjusted permutation p < 0.05 and the leave-one-task-out p < 0.05
+    with every task removed); ``inconclusive`` for a Holm p < 0.05 that fails
+    leave-one-task-out; ``bounded null`` (Holm p ≥ 0.05 and TOST: every non-error class
+    share's 90% interval of SA − R inside ±10 points); else ``inconclusive``."""
+    ctl = control(analysis)
     out = {}
     for kind, c in analysis["cells"].items():
         sa = c["compare"].get("SA")
         lo = c.get("loto") or {}
         robust = bool(lo) and all(not math.isnan(p) and p < ALPHA for p in lo.values())
-        if sa and not math.isnan(c["primary_p_holm"]) and c["primary_p_holm"] < ALPHA and robust:
-            out[kind] = "positive"
+        significant = sa is not None and not math.isnan(c["primary_p_holm"]) and c["primary_p_holm"] < ALPHA
+        if ctl["failed"]:
+            out[kind] = "control failed"
+        elif significant:
+            out[kind] = "positive" if robust else "inconclusive"
         elif sa and equivalent(sa):
             out[kind] = "bounded null"
         else:
@@ -725,10 +731,12 @@ def render(analysis: dict, drops_: dict, cost_: dict, verdicts: dict, ctl: dict,
         L.append(f"| {kind} | {verdicts[kind]} | {f3(sa.get('tvd'))} | {f3(sa.get('tvd_null_mean'))} | "
                  f"{f3(sa.get('tvd_centred'))} | {interval(sa.get('lo'), sa.get('hi'), f3)} | {f3(sa.get('p'))} | "
                  f"{f3(c['primary_p_holm'])} | {f3(lmax)} |")
-    L += ["", "Rule: `positive` needs the Holm-adjusted p < 0.05 and the leave-one-task-out p < 0.05 "
-          "with every task removed; `bounded null` needs every non-error class share's 90% interval "
-          "of SA − R inside ±10 points; else `inconclusive`.", "",
-          f"Control (reported, not part of the rule): R − P regrade gap on unreachable "
+    L += ["", "Rule (protocol §9, §12): `control failed` when the control below fails; `positive` "
+          "needs the Holm-adjusted p < 0.05 and the leave-one-task-out p < 0.05 with every task "
+          "removed (a Holm p < 0.05 that fails it is `inconclusive`); `bounded null` needs Holm "
+          "p ≥ 0.05 and every non-error class share's 90% interval of SA − R inside ±10 points; "
+          "else `inconclusive`.", "",
+          f"Control: R − P regrade gap on unreachable "
           f"{pct(ctl['regrade_gap_R_minus_P'])} points (needs {pct(CONTROL_GAP)}); TVD(B, R) outside the "
           "permutation null: " + ", ".join(f"{k} {'yes' if v else 'no'}" for k, v in sorted(ctl["B_outside_null"].items()))
           + f". Control {'FAILED' if ctl['failed'] else 'held'}.", ""]

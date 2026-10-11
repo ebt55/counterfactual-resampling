@@ -123,15 +123,15 @@ def test_verdict_rules():
     assert not ctl["failed"]
     assert set(an["cells"]["unreachable"]["loto"]) == {"t0", "t1", "t2", "t3"}
     assert A.verdict(an) == {"unreachable": "positive"}
-    # the control is reported beside the verdict, not part of it
+    # one task carrying the whole effect: removing it leaves nothing, so not positive
+    one = [dict(r, task_id="t0") for r in rows]
+    assert A.verdict(A.analyse(one, n_perm=300)) == {"unreachable": "inconclusive"}
+    # the control is part of the verdict (protocol §12): P regrading like R fails it
     for r in rows:
         if r["arm"] == "P":
             r["regrade_pass"] = True
     an = A.analyse(rows, n_perm=500)
-    assert A.control(an)["failed"] and A.verdict(an) == {"unreachable": "positive"}
-    # one task carrying the whole effect: removing it leaves nothing, so not positive
-    one = [dict(r, task_id="t0") for r in _cell(shift=0.45)]
-    assert A.verdict(A.analyse(one, n_perm=300)) == {"unreachable": "inconclusive"}
+    assert A.control(an)["failed"] and A.verdict(an) == {"unreachable": "control failed"}
 
 
 def _write_root(tmp_path: Path, rows: list[dict]) -> tuple[Path, Path]:
