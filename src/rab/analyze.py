@@ -680,7 +680,7 @@ def render(analysis: dict, drops_: dict, cost_: dict, verdicts: dict, ctl: dict,
                 L.append(f"S* lower interval bound ({kind}): {pct(ss['lo'])}.")
         rt = discriminator.get("retest")
         if rt:
-            L.append(f"Test-retest (the same two R observations shown twice, positions swapped): "
+            L.append(f"Consistency (SA against R shown twice, positions swapped): "
                      f"{rt['pairs']} pairs, agreement {pct(rt['agreement'])}; answer A on "
                      f"{pct(rt['answer_A_share'])} of the {rt['answers']} answers (position bias).")
         L.append("")

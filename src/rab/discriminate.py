@@ -14,10 +14,12 @@ Comparisons (:data:`COMPARISONS`), each against R run 0's live observation:
             the SB fake as it would have been written (``rab.place.render_fake``, pilot
             canary salted ``SB``). Events whose R observation does not contain the
             real file verbatim are skipped and counted.
-``RETEST``  test-retest on 30 seeded events: R run 0 and R run 1 shown twice, the second
-            time with the positions swapped (``orient`` 1 and 2). :func:`retest_summary`
-            reports the agreement (the same observation picked both times) and the share
-            of "A" answers (position bias). Not a comparison: no observation is fake.
+``RETEST``  consistency on 30 seeded events: SA run 0 against R run 0 shown twice, the
+            second time with the positions swapped (``orient`` 1: R at A; 2: R at B).
+            :func:`retest_summary` reports the agreement (the same observation called
+            real both times) and the share of "A" answers (position bias). R-vs-R pairs
+            were dropped after pilot 2: two R observations are usually the same text, so
+            the model always answered A and the line measured nothing.
 
 Canonicalised before the call (:func:`canonicalise_pair`): every ``CANARY-<12 hex>`` is
 replaced by one placeholder in both, the files' case lists are subsampled to equal
@@ -214,14 +216,14 @@ def build_items(slots: list[dict], events: dict[str, dict], sims: list[dict] | N
                 skipped["SB: real file not verbatim in R's observation"] += 1
             else:
                 items.append(_item(cont, "SB", real_obs, obs, ev, x0))
-        if ("R", 1) in runs:
+        if ("SA", 0) in runs:
             retest_pool.append(eid)
     for eid in sorted(random.Random(_seed("retest")).sample(retest_pool, min(n_retest, len(retest_pool)))):
         runs = by_event[eid]
         for orient in (1, 2):
             items.append(_item(runs[("R", 0)]["cont"], RETEST, runs[("R", 0)]["cont"]["observation"],
-                               runs[("R", 1)]["cont"]["observation"], events.get(eid, {}),
-                               bool(runs[("R", 0)].get("exploratory") or runs[("R", 1)].get("exploratory")),
+                               runs[("SA", 0)]["cont"]["observation"], events.get(eid, {}),
+                               bool(runs[("R", 0)].get("exploratory") or runs[("SA", 0)].get("exploratory")),
                                orient))
     return items, dict(skipped)
 

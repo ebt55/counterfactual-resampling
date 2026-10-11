@@ -19,9 +19,13 @@ events overall (design v2 F: the 5-event pilot). Within an event the slots are
 ``rab.resume.event_slots`` (18, from ``constants.RUNS_PER_EVENT``, in a seeded shuffle)
 and run on ``--workers`` threads.
 
-Per event, before its slots: the simulator draws (``rab.simulate.draw``) for SA and SB,
-cached in ``<root>/sims.jsonl`` (new lines carry ``git``; their spend goes to the cost
-meter: SA on credit, SB in cash). A prompt leak of severity ``drop`` drops the event.
+Pre-draw phase (:func:`predraw`): before any continuation, the simulator draws
+(``rab.simulate.draw``) for SA and SB of every event still to run, :data:`PREDRAW_THREADS`
+at a time, cached in ``<root>/sims.jsonl`` (new lines carry ``git``; their spend goes to
+the cost meter: SA on credit, SB in cash). The slot phase then reads them from the cache,
+event-major as before; a draw that failed in the pre-draw phase is drawn again there.
+A prompt leak of severity ``drop`` drops the event. At the start a run prints its
+wall-time estimate (:func:`wall_estimate_s`, from a pilot's per-event timings).
 An SA draw that failed (schema twice, refusal) drops SA and SSTAR for that event only.
 
 Per slot (:func:`run_slot`): replay (``rab.prefix.replay``, a fresh container with a
@@ -90,8 +94,19 @@ from rab.types import EventDrop, event_dict as _ev, load_events
 RESULTS = REPO_ROOT / "results"
 DRY_ROOT = RESULTS / "dry"
 DRY_EVENTS_PER_KIND = 2
+PREDRAW_THREADS = 6
+
+#: Wall-time model input: per kind, the median over a pilot's events of the summed slot
+#: seconds (``work_s``) and of the longest slot (``max_slot_s``), from
+#: ``results/exploratory/pilot-2/run_log.jsonl`` when present. The fallback is that file's
+#: values (11 Oct; 4 solvable events, 1 unreachable event): an event takes about
+#: ``max(work_s / workers, max_slot_s)``; pilot 2 ran about 5% above this model.
+PILOT_TIMING_LOG = RESULTS / "exploratory" / "pilot-2" / "run_log.jsonl"
+FALLBACK_EVENT_TIMING = {"solvable": {"work_s": 267.0, "max_slot_s": 44.3},
+                         "unreachable": {"work_s": 1416.8, "max_slot_s": 199.7}}
 
 _log_lock = threading.Lock()
+_sim_lock = threading.Lock()  # sims.jsonl appends and simulator metering, from the pre-draw threads
 
 
 class ArmDrop(Exception):
@@ -241,6 +256,37 @@ def _meter_sim(meter, family: str | None, model: str | None, usage: dict) -> flo
     return meter.add(provider, model or "", usage, seat="simulator") if usage else 0.0
 
 
+# ------------------------------------------------------------------ wall time
+
+def event_timing(log_path: Path = PILOT_TIMING_LOG, events: list[dict] | None = None) -> tuple[dict, str]:
+    """Per-kind medians of an event's summed slot seconds and longest slot, and the source."""
+    import statistics
+
+    kinds = {e["event_id"]: e["kind"] for e in (events or [_ev(e) for e in load_events()])}
+    per_event: dict[str, list[float]] = {}
+    if Path(log_path).is_file():
+        with open(log_path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                row = json.loads(line)
+                if row.get("status") == "done" and row.get("event_id") in kinds:
+                    per_event.setdefault(row["event_id"], []).append(float(row["timing"]["total_s"]))
+    out = {}
+    for kind in C.KINDS:
+        mine = [v for e, v in per_event.items() if kinds[e] == kind]
+        if mine:
+            out[kind] = {"work_s": statistics.median(sum(v) for v in mine),
+                         "max_slot_s": statistics.median(max(v) for v in mine), "events": len(mine)}
+        else:
+            out[kind] = dict(FALLBACK_EVENT_TIMING[kind], events=0)
+    src = str(log_path) if per_event else "FALLBACK_EVENT_TIMING (pilot 2, 11 Oct)"
+    return out, src
+
+
+def wall_estimate_s(n_by_kind: dict[str, int], workers: int, timing: dict) -> float:
+    """Slot-phase seconds: sum over events of ``max(work_s / workers, max_slot_s)``."""
+    return sum(n * max(timing[k]["work_s"] / workers, timing[k]["max_slot_s"]) for k, n in n_by_kind.items())
+
+
 # ------------------------------------------------------------------ one slot
 
 def _replay_ok(rec: dict, ev: dict, batch_id: str):
@@ -360,12 +406,13 @@ def _git_sim_cache(path: Path, meter, exploratory: bool):
     class GitSimCache(SimCache):
         def put(self, sim) -> None:
             row = {**sim.to_json(), "git": git_state(), "exploratory": exploratory}
-            _meter_sim(meter, sim.family, sim.model, sim.usage or {})
-            self._rows[(sim.model, sim.prompt_sha256)] = row
-            if self.path:
-                self.path.parent.mkdir(parents=True, exist_ok=True)
-                with open(self.path, "a", encoding="utf-8", newline="\n") as fh:
-                    fh.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
+            with _sim_lock:
+                _meter_sim(meter, sim.family, sim.model, sim.usage or {})
+                self._rows[(sim.model, sim.prompt_sha256)] = row
+                if self.path:
+                    self.path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(self.path, "a", encoding="utf-8", newline="\n") as fh:
+                        fh.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
 
     return GitSimCache(path)
 
@@ -385,6 +432,43 @@ def draws_for(ev: dict, rec: dict, root: Path, callers: dict, meter, exploratory
                                      "severity": "drop", "detail": sim.detail}, sort_keys=True) + "\n")
             raise EventDrop("leak", f"simulator prompt {family}")
     return out
+
+
+def predraw(events: list[dict], root: Path, callers: dict, meter, exploratory: bool,
+            threads: int = PREDRAW_THREADS) -> dict:
+    """Draw SA and SB for every event before any continuation, ``threads`` at a time.
+
+    Cached draws cost nothing. A draw that fails here (API error, leak verdict) is not
+    fatal: the slot phase draws again for that event and handles the outcome there.
+    """
+    from rab.simulate import draw
+
+    cache = _git_sim_cache(root / "sims.jsonl", meter, exploratory)
+    counts = {"events": len(events), "ok": 0, "failed": 0, "errors": 0}
+    t0 = time.time()
+
+    def one(ev: dict) -> str:
+        rec = km.load_record(ev["run_id"], ev["position"])
+        states = []
+        for family in ("SA", "SB"):
+            sim = draw(rec, ev, family, callers[family], cache)
+            states.append(sim.ok)
+        return "ok" if all(states) else "failed"
+
+    with ThreadPoolExecutor(max_workers=threads, thread_name_prefix="rabdraw") as pool:
+        futs = {pool.submit(one, ev): ev for ev in events}
+        for n, (fut, ev) in enumerate(futs.items(), 1):
+            try:
+                counts[fut.result()] += 1
+            except Exception as exc:  # retried serially in the slot phase
+                counts["errors"] += 1
+                log_line(root, {"event_id": ev["event_id"], "predraw_error": f"{type(exc).__name__}: {exc}"[:500]})
+            if n % 10 == 0 or n == len(futs):
+                print(f"[predraw] {n}/{len(futs)} events, {counts}, {time.time() - t0:.0f}s, "
+                      f"cash ${meter.cash_usd:.4f}", file=sys.stderr, flush=True)
+    counts["seconds"] = round(time.time() - t0, 1)
+    log_line(root, {"predraw": counts})
+    return counts
 
 
 def make_callers(dry_run: bool) -> dict:
@@ -440,6 +524,16 @@ def run(*, dry_run: bool, root: Path, per_kind: int | None, pilot: int | None, w
     dropped, arm_drops = [], []
     print(f"[run] {len(events)} events, {workers} workers, root {root}, dry_run={dry_run}, "
           f"exploratory={exploratory}, git {git_state()}, spend on disk {seeded}", file=sys.stderr, flush=True)
+    timing, timing_src = event_timing(events=None)
+    n_by_kind = {k: sum(1 for e in events if e["kind"] == k) for k in C.KINDS}
+    full = {k: C.N_PER_KIND for k in C.KINDS}
+    print(f"[run] wall-time estimate (slot phase, from {timing_src}): this run "
+          f"{wall_estimate_s(n_by_kind, workers, timing) / 3600:.2f} h at {workers} workers; headline 60+60 "
+          f"{wall_estimate_s(full, 4, timing) / 3600:.1f} h at 4 workers, "
+          f"{wall_estimate_s(full, 6, timing) / 3600:.1f} h at 6", file=sys.stderr, flush=True)
+    pending = [ev for ev in events if not drop_path(root, ev["event_id"], exploratory).is_file()
+               and any(not slot_path(root, ev["event_id"], a, j, exploratory).is_file() for a, j in event_slots(ev))]
+    predraw(pending, root, callers, meter, exploratory)
     try:
         for idx, ev in enumerate(events):
             stopper.check()

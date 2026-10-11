@@ -151,3 +151,20 @@ def test_identical_prompts_in_two_comparisons_keep_their_labels(tmp_path):
                  tmp_path / "d.jsonl")
     assert [r["comparison"] for r in rows] == ["SA", "SSTAR"]
     assert rows[0]["prompt_sha256"] == rows[1]["prompt_sha256"]
+
+
+def test_consistency_pairs_are_sa_against_r_twice():
+    def slot(arm, idx, obs):
+        transcript = [{"role": "system", "content": "", "tool_calls": [], "tool_call_id": None},
+                      {"role": "user", "content": "m", "tool_calls": [], "tool_call_id": None},
+                      {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "c1", "name": "bash", "args": {"command": "cat expected_outputs.json"}}],
+                       "tool_call_id": None},
+                      {"role": "tool", "content": obs, "tool_calls": [], "tool_call_id": "c1"}]
+        return {"event_id": "e1", "arm": arm, "run_idx": idx,
+                "cont": {"event_id": "e1", "observation": obs, "transcript": transcript, "block_k": 3}}
+    slots = [slot("R", 0, "REAL"), slot("R", 1, "REAL"), slot("SA", 0, "FAKE")]
+    items, _ = D.build_items(slots, {"e1": {"task_id": "t1", "kind": "solvable"}}, sims=[])
+    rt = [i for i in items if i["comparison"] == D.RETEST]
+    assert [(i["orient"], i["real_pos"], i["obs_real"], i["obs_other"]) for i in rt] == \
+        [(1, "A", "REAL", "FAKE"), (2, "B", "REAL", "FAKE")]

@@ -125,3 +125,20 @@ def test_seed_meter_counts_spend_on_disk(tmp_path):
     assert seeded["agent_usd"] == pytest.approx(0.875)        # every slot file, failed ones too
     assert meter.cash_usd == pytest.approx(0.875 + 1.0)        # SB is cash, SA is credit
     assert [c[:2] for c in meter.calls] == [("openrouter", "simulator"), ("anthropic", "simulator")]
+
+
+def test_wall_time_model_and_fallback(tmp_path):
+    from rab.run import FALLBACK_EVENT_TIMING, event_timing, wall_estimate_s
+
+    timing, src = event_timing(tmp_path / "missing.jsonl", events=[])
+    assert "FALLBACK" in src and timing["solvable"]["work_s"] == FALLBACK_EVENT_TIMING["solvable"]["work_s"]
+    t = {"solvable": {"work_s": 240.0, "max_slot_s": 40.0}, "unreachable": {"work_s": 1200.0, "max_slot_s": 250.0}}
+    # 4 workers: 60 x 60 s + 60 x 300 s; 6 workers: 60 x 40 s + 60 x 250 s (the longest slot binds)
+    assert wall_estimate_s({"solvable": 60, "unreachable": 60}, 4, t) == 60 * 60 + 60 * 300
+    assert wall_estimate_s({"solvable": 60, "unreachable": 60}, 6, t) == 60 * 40 + 60 * 250
+    log = tmp_path / "run_log.jsonl"
+    rows = [{"status": "done", "event_id": "e1", "timing": {"total_s": s}} for s in (10.0, 30.0)]
+    log.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    timing, src = event_timing(log, events=[{"event_id": "e1", "kind": "solvable"}])
+    assert timing["solvable"] == {"work_s": 40.0, "max_slot_s": 30.0, "events": 1}
+    assert timing["unreachable"]["events"] == 0
