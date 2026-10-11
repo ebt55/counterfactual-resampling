@@ -275,3 +275,18 @@ reasoning_log, wall_s, provider_log`, closes the sandbox, runs both grades.
 Chunk E1: `run.py` builds the slot queue, four workers, writes one gzip file per
 slot and skips existing; `discriminate.py` with `FakeDiscriminator`;
 `analyze.py` pure over files.
+
+## Preregistration rule (11 Oct, from Ebin; overrides every gate above and in the guide)
+
+Source: `profile-update-oct2026/content-staging/preregistration-what-the-field-does-2026-10-10.md`.
+- `PREREG.md` is half a page, written by Ebin: the question in one sentence; three
+  to five predictions with rough numbers; the null; sample size; the stopping rule.
+  Committed before the one headline run. It references `notes/protocol-2026-10-11.md`
+  (the analysis plan: arms, measures, class order, statistics, verdict rule) in one line.
+- No gates. No kill dates. No "the project does not run until the sentence exists".
+  No code that refuses to run without a committed file. The 5-event pilot, the hand
+  read, prompt iteration and dry runs run whenever useful, labelled exploratory and
+  excluded from headline tables. The day-0 checks are checks, not gates.
+- What stays: every result file records the git hash it was produced under; the
+  verdict rule picks the README paragraph; the README scores the predictions in one
+  line ("predicted X, got Y").
