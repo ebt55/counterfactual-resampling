@@ -142,3 +142,12 @@ def test_retest_items_with_identical_observations_are_two_calls(tmp_path):
     rows = D.run(items, D.FakeDiscriminator(), tmp_path / "d.jsonl")
     assert [r["orient"] for r in rows] == [1, 2]
     assert D.retest_summary(rows)["pairs"] == 1
+
+
+def test_identical_prompts_in_two_comparisons_keep_their_labels(tmp_path):
+    base = {"event_id": "e1", "task_id": "t1", "kind": "solvable", "real_pos": "A", "obs_real": "R",
+            "obs_other": "X", "prefix_tail": "tail", "call": "bash({})", "visible_test_text": ""}
+    rows = D.run([dict(base, comparison="SA"), dict(base, comparison="SSTAR")], D.FakeDiscriminator(),
+                 tmp_path / "d.jsonl")
+    assert [r["comparison"] for r in rows] == ["SA", "SSTAR"]
+    assert rows[0]["prompt_sha256"] == rows[1]["prompt_sha256"]

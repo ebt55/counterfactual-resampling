@@ -30,7 +30,9 @@ Beside it, :func:`surface_baseline`: a logistic model on surface features (case 
 length, visible-test argument reuse, non-empty kwargs), cross-validated by task (leave
 one task out), numpy and scipy only.
 
-Calls are cached by ``(model, prompt sha256)`` in ``results/discriminator.jsonl``; one
+Calls are cached by ``(model, prompt sha256, comparison, event, orientation)`` in
+``results/discriminator.jsonl`` (two arms can yield the same canonical prompt, e.g. S* equal
+to SA when SA's values were already right; each still gets its own labelled call); one
 JSON line per call with the comparison, event, position and score, so the scoring is
 pure over that file; each line also records ``git`` (hash and dirty flag at the time of
 the call) and ``exploratory`` (built from exploratory slot files). Exploratory slots are
@@ -285,14 +287,15 @@ def read_rows(path: Path) -> list[dict]:
 
 def run(items: list[dict], caller, path: Path) -> list[dict]:
     """Call (or reuse from the cache) every item; append new rows to ``path``."""
-    cache = {(r["model"], r["prompt_sha256"]): r for r in read_rows(path)}
+    key = lambda model, sha, it: (model, sha, it["comparison"], it["event_id"], it.get("orient", 0))
+    cache = {key(r["model"], r["prompt_sha256"], r): r for r in read_rows(path)}
     out = []
     for item in items:
         system, user = build_prompt(item)
         sha = prompt_sha256(system, user)
         if item["comparison"] == RETEST:  # two R observations can be identical: keep both calls
             sha = prompt_sha256(system, f"{user}\x00retest-orient-{item.get('orient', 0)}")
-        row = cache.get((caller.model, sha))
+        row = cache.get(key(caller.model, sha, item))
         if row is None:
             res = caller(system, user)
             if res.get("stop") == "error":
@@ -310,7 +313,7 @@ def run(items: list[dict], caller, path: Path) -> list[dict]:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
             with open(path, "a", encoding="utf-8", newline="\n") as fh:
                 fh.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
-            cache[(caller.model, sha)] = row
+            cache[key(caller.model, sha, item)] = row
         out.append(row)
     return out
 
