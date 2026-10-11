@@ -1,6 +1,6 @@
 # Replay check (guide §1 "Replay", §3)
 
-Generated 2026-10-11 06:37 UTC by `uv run python -m rab.prefix --check 20` (seed 20261011), from `data/events.jsonl`.
+Generated 2026-10-11 06:37 UTC by `uv run python tools/replay_check.py --check 20` (seed 20261011), from `data/events.jsonl`.
 Image `dosecurve-sandbox:latest` = `sha256:bafc8ec7eef84467c92dc60c576732538b79553bb1d6e1b7402d37e3fe19dddf`. One fresh env-v2 container per event, run in turn; every container removed after its event. 16.6 s in all.
 
 **Content: 20 of 20 events reproduce every prefix output (`content_equal`); the rule needs 19. PASS. Strict (`normalise` only): 20 of 20.**
@@ -83,7 +83,7 @@ events changed against the previous draw): content 20 of 20, strict 20 of 20.
 
 ### Eligibility sweep: every eligible event (`data/replay_sweep.json`)
 
-`uv run python -m rab.prefix --sweep` replays all 183 events that `rab.select` keeps
+`uv run python tools/replay_check.py --sweep` replays all 183 events that `rab.select` keeps
 before the draw (its own `scan` and `eligible_ids`), one fresh container each. An event
 is eligible for the draw only if `ok` (every prefix call `content_equal`, every
 host-side step done); `rab.select` drops the others as `replay` before the seeded draw.

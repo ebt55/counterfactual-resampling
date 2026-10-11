@@ -31,7 +31,7 @@ Filter, in the guide's order
    ``__contradict`` (label leak), and no ``tool_calls[:i]`` output contains the
    ``hidden_tests.py`` canary.
 6. Build plan decision 17(c), a departure from the guide: when
-   ``data/replay_sweep.json`` exists (``python -m rab.prefix --sweep``, one fresh env-v2
+   ``data/replay_sweep.json`` exists (``uv run python tools/replay_check.py --sweep``, one fresh env-v2
    replay of every event left after step 4), events whose prefix did not replay
    (``ok`` false: some call not ``content_equal`` to its recording, or the ``/work``
    touch failed) are dropped as ``replay``. The recount lists them per kind and records
@@ -519,7 +519,7 @@ def scan(records: Iterable[dict]) -> tuple[list[dict], dict]:
 def apply_replay_sweep(found: list[dict], sweep_path: Path | None = SWEEP_PATH) -> dict | None:
     """Decision 17(c): drop as ``replay`` every eligible event whose prefix did not replay.
 
-    ``data/replay_sweep.json`` (``python -m rab.prefix --sweep``) maps every eligible
+    ``data/replay_sweep.json`` (``uv run python tools/replay_check.py --sweep``) maps every eligible
     event id to ``{"ok": ...}``; an eligible event missing from it, or listed under
     another kind, is an error. Returns the sweep's provenance, or None without a file.
     """

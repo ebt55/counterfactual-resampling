@@ -7,8 +7,8 @@
 
 ``CallDiff`` and ``Replay`` are defined in ``rab.prefix`` (chunk B owns that file) and
 imported here, so ``from rab.types import Replay`` works with every field B added
-(``strict_ok``, ``event_id``, ``replayed``, ``work_listing``, ``notes``, ``failures``,
-the ``first_failure`` property; ``CallDiff.content_matched``). ``EventDrop`` is the one
+(``strict_ok``, ``event_id``, ``replayed``, ``work_listing``, ``notes``, ``failures``;
+``CallDiff.content_matched``). ``EventDrop`` is the one
 exception that removes an event from every arm (``rab.run`` catches it).
 ``event_dict`` turns an ``Event`` or a row dict into a plain dict.
 
