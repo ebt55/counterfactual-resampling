@@ -1,6 +1,6 @@
 # Day-0 keyed checks (guide §1 "Served" and "Credit")
 
-Run 2026-10-11T06:05:02Z by `uv run python -m rab.resume --day0`. Full endpoint lists are the `kind: endpoints` lines of `results/provider.log`; prices are USD per million tokens from the OpenRouter endpoints API.
+Run 2026-10-11T12:59:38Z by `uv run python tools/day0.py`. Full endpoint lists are the `kind: endpoints` lines of `results/provider.log`; prices are USD per million tokens from the OpenRouter endpoints API.
 
 | Seat | Model | Endpoint (provider_name) | Routing tag (`provider.order`) | Input | Output | Cache read |
 |---|---|---|---|---|---|---|
@@ -13,16 +13,35 @@ Endpoints listed: {'deepseek/deepseek-v4.1-flash': 32, 'z-ai/glm-5.3-flash': 33}
 
 ```json
 {
- "pin_held": false,
- "served_by": null,
- "status": 404,
- "stop_reason": "error",
- "text": "",
- "usage": null,
- "error": {
-  "category": "api_error",
-  "explanation": "HTTP 404: No endpoints found for deepseek/deepseek-v4.1-flash. Every candidate endpoint was removed during routing: ... Filter by Guardrails removed deepseek (Paid model training violation (account settings)); Filter by Fallback removed [every other endpoint, as allow_fallbacks is false] (body abridged; read from one identical unbilled reproduction of the request without the hook, 2026-10-11)"
- }
+ "stop_reason": "end_turn",
+ "text": "ok",
+ "error": null,
+ "served_by": "DeepSeek",
+ "status": 200,
+ "usage": {
+  "prompt_tokens": 600,
+  "completion_tokens": 2,
+  "total_tokens": 602,
+  "cost": 9.12e-05,
+  "is_byok": false,
+  "prompt_tokens_details": {
+   "cached_tokens": 0,
+   "cache_write_tokens": 0,
+   "audio_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost_details": {
+   "upstream_inference_cost": 9.12e-05,
+   "upstream_inference_prompt_cost": 9e-05,
+   "upstream_inference_completions_cost": 1.2e-06
+  },
+  "completion_tokens_details": {
+   "reasoning_tokens": 0,
+   "image_tokens": 0,
+   "audio_tokens": 0
+  }
+ },
+ "pin_held": true
 }
 ```
 
@@ -38,11 +57,3 @@ Endpoints listed: {'deepseek/deepseek-v4.1-flash': 32, 'z-ai/glm-5.3-flash': 33}
  }
 }
 ```
-
-## Notes
-
-- **Served: FAIL, not a model outage.** OpenRouter lists DeepSeek's own endpoint (tag `deepseek`, $0.15 / $0.60 / cache read $0.003, status 0), but routing removed it under the account's guardrail: "Paid model training violation (account settings)". DeepSeek's endpoint may train on paid prompts and the new account's privacy setting forbids that. With `allow_fallbacks: false` no other endpoint may serve, so the call returned 404 (not billed).
-- **Fix is an account setting, Ebin's decision:** allow endpoints that may train on paid prompts in OpenRouter's privacy settings (or decide otherwise). Nothing in this repo was changed to route around it, and the line was not switched. Re-run `uv run python -m rab.resume --day0` afterwards; it makes one pinned DeepSeek call and one Haiku call (cents).
-- **Credit: PASS.** One `claude-haiku-5-5` call returned HTTP 200 (17 in, 4 out tokens; about $0.000004).
-- **SB pin chosen, not yet exercised:** Z.AI's own endpoint `z-ai/fp8` ($0.15 / $0.50 / $0.03). Whether the same guardrail admits it is unknown until a call is made.
-- Prices of both pinned endpoints equal KM's `analysis/prices.json` (2026-09-15), so no price override is set.

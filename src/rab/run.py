@@ -465,7 +465,7 @@ def run(*, dry_run: bool, root: Path, per_kind: int | None, pilot: int | None, w
             if not sa.ok:
                 for a in ("SA", "SSTAR"):
                     _write_json(armdrop_path(root, eid, a, exploratory),
-                                {"event_id": eid, "arm": a, "reason": f"SA draw failed: {sa.failure}",
+                                {"event_id": eid, "kind": ev["kind"], "arm": a, "reason": f"SA draw failed: {sa.failure}",
                                  "exploratory": exploratory, "git": git_state()})
                 todo = [(a, j) for a, j in todo if a not in ("SA", "SSTAR")]
             kw = dict(root=root, sim_obj=sa.obj if sa.ok else None, provider_for=provider_for, meter=meter,
@@ -485,7 +485,7 @@ def run(*, dry_run: bool, root: Path, per_kind: int | None, pilot: int | None, w
                         p = armdrop_path(root, eid, ad.arm, exploratory)
                         if not p.is_file():
                             arm_drops.append(f"{eid}:{ad.arm}")
-                            _write_json(p, {"event_id": eid, "arm": ad.arm, "reason": ad.reason,
+                            _write_json(p, {"event_id": eid, "kind": ev["kind"], "arm": ad.arm, "reason": ad.reason,
                                             "exploratory": exploratory, "git": git_state()})
                             log_line(root, {"event_id": eid, "arm_drop": ad.arm, "reason": ad.reason})
                         continue
