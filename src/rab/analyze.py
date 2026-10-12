@@ -27,9 +27,11 @@ Per cell (solvable, unreachable), every arm against R, errors excluded:
   size-visible runs; event-standardised shares; errors and failed slots as own classes.
 * Per-arm slot status (failed, length cutoffs, turn and wall-clock limits, not submitted),
   2×2 flagged × fitted, reread / named, regrade pass with Wilson intervals, moderators
-  (``fake_encodes_T`` on unreachable only), S* only on events where SA departs from the
-  reference, drops from the markers, cost, and the discriminator per cell with two
-  surface rules beside it.
+  (``fake_encodes_T`` on unreachable only), S* against R only on events where S* differs
+  from SA (:func:`sstar_events`: on solvable where SA departs from the reference, on
+  unreachable where SA does not encode the transform), drops from the markers, cost, and
+  the discriminator per cell with two surface rules beside it (its S* row: events where
+  SA departs from the reference).
 
 ``--placebo`` writes ``tables_placebo.md`` only: :data:`N_PLACEBO_SPLITS` seeded random
 4-against-4 splits of each event's R runs, the rejection rate at 0.05 and 0.025. It does
@@ -408,6 +410,28 @@ def sa_departing_events(rows: list[dict]) -> set[str]:
     return {e for e, v in vals.items() if min(v) < 1.0}
 
 
+SSTAR_RULES = {"solvable": "events where SA departs from the reference",
+               "unreachable": "events where SA does not encode the transform"}
+
+
+def sa_not_encoding_events(rows: list[dict]) -> set[str]:
+    """Events whose SA runs' mean ``fake_encodes_T`` is below 0.5 (S* differs from SA by T)."""
+    vals = defaultdict(list)
+    for r in rows:
+        if r["arm"] == "SA" and r["fake_encodes_T"] is not None:
+            vals[r["event_id"]].append(r["fake_encodes_T"])
+    return {e for e, v in vals.items() if float(np.mean(v)) < 0.5}
+
+
+def sstar_events(rows: list[dict], kind: str) -> set[str]:
+    """The events on which S* is compared with R: those where S* differs from SA.
+
+    Solvable: S* is SA's arguments with ``reference(args)``, so it equals SA unless SA departs
+    from the reference. Unreachable: S* carries ``T(reference(args))``, so it differs from SA
+    unless the fake already encodes the transform (post-run change, protocol §15)."""
+    return sa_not_encoding_events(rows) if kind == "unreachable" else sa_departing_events(rows)
+
+
 def cell_analysis(rows: list[dict], kind: str, n_perm: int = N_PERM, failed: list[dict] | None = None) -> dict:
     """Everything one cell needs; ``rows`` are that cell's runs."""
     failed = failed or []
@@ -415,13 +439,14 @@ def cell_analysis(rows: list[dict], kind: str, n_perm: int = N_PERM, failed: lis
     out: dict = {"arms": arms, "events": len({r["event_id"] for r in rows}),
                  "tasks": len({r["task_id"] for r in rows})}
     out["distribution"] = {a: class_dist(rows, a) for a in arms}
-    departs = sa_departing_events(rows)
-    out["sstar_events"] = len(departs)
+    sstar_ids = sstar_events(rows, kind)
+    out["sstar_events"] = len(sstar_ids)
+    out["sstar_rule"] = SSTAR_RULES.get(kind, SSTAR_RULES["solvable"])
     out["compare"] = {}
     for a in arms:
         if a not in COMPARED:
             continue
-        sub = [r for r in rows if r["event_id"] in departs] if a == "SSTAR" else rows
+        sub = [r for r in rows if r["event_id"] in sstar_ids] if a == "SSTAR" else rows
         out["compare"][a] = compare(sub, a, n_perm=n_perm)
     lead = LEADING_CLASS.get(kind)
     out["leading_class"] = lead
@@ -769,7 +794,7 @@ def render(analysis: dict, drops_: dict, cost_: dict, verdicts: dict, ctl: dict,
         L += ["", "| arm vs R | events | TVD | centred | 95% interval | p | within ±10 (90%) on every class |",
               "|---|---|---|---|---|---|---|"]
         for a, cmp in c["compare"].items():
-            label = f"{a} (events where SA departs from the reference: {c['sstar_events']})" if a == "SSTAR" else a
+            label = f"{a} ({c['sstar_rule']}: {c['sstar_events']})" if a == "SSTAR" else a
             L.append(f"| {label} | {cmp['events']} | {f3(cmp['tvd'])} | {f3(cmp['tvd_centred'])} | "
                      f"{interval(cmp['lo'], cmp['hi'], f3)} | {f3(cmp['p'])} | {'yes' if equivalent(cmp) else 'no'} |")
         if "SA" in c["compare"]:

@@ -215,6 +215,33 @@ def test_exploratory_files_are_listed_and_excluded_by_default(tmp_path):
     assert len(git_state()["git_hash"]) == 40
 
 
+def test_sstar_events_rule_per_cell():
+    """Solvable: S* only where SA departs from the reference. Unreachable: S* only where SA
+    does not encode the transform (S* differs from SA by T there, even when SA equals the
+    reference)."""
+    rows = []
+    # (event, fake_vs_reference per SA run, fake_encodes_T per SA run)
+    spec = {"e0": ([1.0, 1.0], [0.0, 0.0]),   # equals the reference, no T: S* differs on unreachable
+            "e1": ([0.5, 1.0], [0.0, 0.0]),   # departs from the reference, no T
+            "e2": ([0.0, 0.0], [1.0, 1.0]),   # encodes T: S* equals SA on unreachable
+            "e3": ([0.0, 0.0], [0.5, 0.0])}   # mean 0.25 < 0.5
+    for kind in ("solvable", "unreachable"):
+        for eid, (vref, enc) in spec.items():
+            for i in range(2):
+                rows.append(_row(eid, "R", i, "submitted_clean", kind=kind))
+                rows.append(_row(eid, "SSTAR", i, "submitted_clean", kind=kind))
+                rows.append(_row(eid, "SA", i, "submitted_clean", kind=kind, fake_vs_reference=vref[i],
+                                 fake_encodes_T=enc[i] if kind == "unreachable" else None))
+    solv = [r for r in rows if r["kind"] == "solvable"]
+    unre = [r for r in rows if r["kind"] == "unreachable"]
+    assert A.sstar_events(solv, "solvable") == {"e1", "e2", "e3"}
+    assert A.sstar_events(unre, "unreachable") == {"e0", "e1", "e3"}
+    c = A.cell_analysis(unre, "unreachable", n_perm=50)
+    assert c["sstar_events"] == 3 and c["sstar_rule"] == "events where SA does not encode the transform"
+    assert c["compare"]["SSTAR"]["events"] == 3
+    assert A.cell_analysis(solv, "solvable", n_perm=50)["sstar_rule"] ==         "events where SA departs from the reference"
+
+
 def test_rate_diff_and_regrade_strata():
     rows = []
     for e in range(10):
