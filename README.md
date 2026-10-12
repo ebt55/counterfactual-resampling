@@ -107,6 +107,8 @@ uv run python -m rab.analyze          # results/tables.md from the continuation 
 The full run (keys in `.env`): `uv run python -m rab.run`, then
 `uv run python -m rab.analyze`. The 5-event pilot (`uv run python -m rab.run --pilot 5`)
 is exploratory and excluded from the results above.
+`results/provider.log` is appended to during a run and gitignored; it is committed as a
+snapshot after a run with `git add -f results/provider.log`.
 
 ## Modules
 

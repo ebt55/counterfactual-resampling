@@ -53,6 +53,8 @@ def classify(recorded: str, replayed: str) -> str:
     * ``timeout``: one side carries KM's ``[command timed out ...]`` head.
     * ``truncation boundary``: exactly one side was truncated.
     * ``lines only in the recording`` / ``lines only in the replay``.
+    * ``ls total line``: every differing line is an ``ls -l`` ``total N`` line (cannot
+      occur after :func:`normalise` since 12 Oct; kept for texts normalised the old way).
     * ``ls -l link count (/proc nlink)`` / ``ls -l link count``: paired ``ls -l`` lines
       equal once the link count and its padding are dropped (the ``/proc`` form cannot
       occur after :func:`normalise`; kept for texts normalised the old way).
@@ -77,6 +79,9 @@ def classify(recorded: str, replayed: str) -> str:
     if new and not gone:
         return "lines only in the replay"
     pairs = list(zip(gone, new))
+    total = re.compile(r"^total \d+\r?$")
+    if len(gone) == len(new) and all(total.match(x) for x in gone + new):
+        return "ls total line"
     if len(gone) == len(new):
         ma = [_LS_NLINK.match(x) for x in gone]
         mb = [_LS_NLINK.match(y) for y in new]

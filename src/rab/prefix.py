@@ -17,8 +17,9 @@ Three jobs, all keyless:
 Two comparators, both recorded everywhere:
 
 * strict, ``normalise(recorded) == normalise(replayed)`` (``CallDiff.matched``,
-  ``Replay.strict_ok``): the guide's rule, ``ls -l`` dates and pytest timings, plus one
-  departure, the ``/proc`` link count (see :func:`normalise`).
+  ``Replay.strict_ok``): the guide's rule, ``ls -l`` dates and pytest timings, plus two
+  departures, the ``/proc`` link count and the ``ls -l`` ``total N`` line (see
+  :func:`normalise`).
 * content, :func:`content_equal` (``CallDiff.content_matched``, ``Replay.ok``): strict,
   or the same lines with only ``prog: message`` diagnostics moved, because
   ``docker exec`` carries stdout and stderr on separate streams and their merge order
@@ -164,7 +165,8 @@ _MONTH = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
 #: or ``Mon DD  YYYY`` (older than six months or in the future), then a space and the
 #: name. Only the date column is replaced. Deliberately NOT covered, so they stay
 #: failures: ``--full-time`` / ``--time-style`` / ISO dates, ``ls -s`` block prefixes,
-#: ``find -ls`` / ``stat`` output, ``total N`` lines, and any date anywhere else.
+#: ``find -ls`` / ``stat`` output, and any date anywhere else (``total N`` lines are
+#: :data:`LS_TOTAL_RE`'s).
 LS_DATE_RE = re.compile(
     r"^(?P<head>[-bcdlps][rwxsStT-]{9}[.+@]?[ ]+\d+[ ]+(?:\S+[ ]+){1,2}"
     r"(?:\d+,[ ]*)?\d+(?:\.\d+)?[KMGTPE]?[ ]+)"
@@ -199,6 +201,14 @@ LS_NLINK_RE = re.compile(
 )
 PROC_NLINK_TOKEN = "<nproc>"
 
+#: Departure from the guide (12 Oct, during the headline run): the ``total N`` summary
+#: line of ``ls -l``, matched as a whole line (a trailing ``\r`` is kept). ``N`` is the
+#: directory's block count, set by the filesystem's allocation, not by any agent action
+#: (``total 64`` recorded vs ``total 60`` replayed dropped four events on 11 Oct).
+#: ``total`` inside a longer line is not touched.
+LS_TOTAL_RE = re.compile(r"^total \d+(?P<cr>\r?)$", re.M)
+LS_TOTAL_TOKEN = "total <n>"
+
 #: A ``prog: message`` diagnostic line, e.g. ``cat: data/x.md: No such file or directory``.
 DIAGNOSTIC_RE = re.compile(r"^\S+: .*")
 
@@ -209,18 +219,22 @@ def _nlink(m: re.Match) -> str:
 
 
 def normalise(text: str) -> str:
-    """Erase ``ls -l`` dates, pytest timings and ``/proc``'s link count.
+    """Erase ``ls -l`` dates, pytest timings, ``/proc``'s link count and ``ls -l`` totals.
 
     Guide §1: ``normalise`` touches only ``ls -l`` dates and pytest timings
     (``in \\d+\\.\\d+s``); any other difference between a replayed and a recorded output
-    is a replay failure. One recorded departure (PREREG): the ``/proc`` link count and
-    the link-column padding it drives (:data:`LS_NLINK_RE`). See :data:`LS_DATE_RE` for
-    the exact ``ls -l`` shape (deliberately narrow) and :data:`PYTEST_TIME_RE`.
+    is a replay failure. Two recorded departures (protocol §15, build plan 17(a)):
+    the ``/proc`` link count and the link-column padding it drives
+    (:data:`LS_NLINK_RE`); and a whole ``total N`` line, the ``ls -l`` block count
+    (filesystem allocation), becomes ``total <n>`` (:data:`LS_TOTAL_RE`). See
+    :data:`LS_DATE_RE` for the exact ``ls -l`` shape (deliberately narrow) and
+    :data:`PYTEST_TIME_RE`.
     """
     if not text:
         return text or ""
     text = LS_DATE_RE.sub(lambda m: m["head"] + LS_DATE_TOKEN + m["tail"], text)
     text = LS_NLINK_RE.sub(_nlink, text)
+    text = LS_TOTAL_RE.sub(lambda m: LS_TOTAL_TOKEN + m["cr"], text)
     return PYTEST_TIME_RE.sub(lambda m: m["head"] + PYTEST_TIME_TOKEN + m["tail"], text)
 
 

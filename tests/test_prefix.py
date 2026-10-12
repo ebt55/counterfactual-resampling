@@ -16,6 +16,7 @@ import pytest
 from rab import km
 from rab.prefix import (
     LS_DATE_RE,
+    LS_TOTAL_RE,
     PYTEST_TIME_RE,
     build_messages,
     content_equal,
@@ -155,6 +156,8 @@ def test_normalise_only_touches_dates_and_timings() -> None:
     erased = {i for m in LS_DATE_RE.finditer(text) for i in range(*m.span("date"))}
     erased |= {i for m in PYTEST_TIME_RE.finditer(text)
                for i in range(m.end("head"), m.start("tail"))}
+    erased |= {i for m in LS_TOTAL_RE.finditer(text)
+               for i in range(m.start() + len("total "), m.start("cr"))}
     base = normalise(text)
     changed = 0
     for i, ch in enumerate(text):
@@ -201,6 +204,19 @@ def test_normalise_proc_nlink() -> None:
     assert normalise(ROOT_REC) != normalise(ROOT_REP.replace("root 4096", "root  4096"))
     # a line that is not an `ls -l` line keeps its spacing
     assert normalise("x   1 proc") != normalise("x 1 proc")
+
+
+def test_normalise_ls_total_line() -> None:
+    # the block count on the `total` line (filesystem allocation) normalises equal
+    assert normalise(LS.replace("total 40", "total 64")) == normalise(LS.replace("total 40", "total 60"))
+    assert normalise("total 64\r\nx") == normalise("total 60\r\nx") == "total <n>\r\nx"
+    assert normalise(ROOT_REC) == normalise(ROOT_REP.replace("total 64", "total 60"))
+    # `total` inside a longer line still differs
+    for a, b in [("grand total 64", "grand total 60"), ("total 64 blocks", "total 60 blocks"),
+                 (" total 64", " total 60"), ("total 64K", "total 60K"), ("total: 64", "total: 60")]:
+        assert normalise(a) != normalise(b), a
+    # a changed size column still differs, with the total line also changed
+    assert normalise(LS) != normalise(LS.replace("total 40", "total 44").replace(" 1474 ", " 1475 "))
 
 
 DIAG_REC = "\n".join([
@@ -318,6 +334,7 @@ def test_sweep_classes_are_byte_stable():
         "timeout": ("[command timed out after 60s]\n/a\n/b", "[command timed out after 60s]\n/a"),
         "lines only in the recording": ("a\nb\nc", "a\nc"),
         "ls -l link count": (ls(1, "tmp"), ls(2, "tmp")),
+        "ls total line": ("x\ntotal 64\n" + ls(1, "tmp"), "x\ntotal 60\n" + ls(1, "tmp")),
         "/proc/<pid> entries": ("/\n/proc/373\n/sys", "/\n/proc/80\n/sys"),
         "container id/hostname": ("HOSTNAME=891f9ef275a1\nPATH=/x", "HOSTNAME=0f7fecf7f3b1\nPATH=/x"),
         "date/time outside an ls -l date column": ("Access: 2026-09-13 18:02", "Access: 2026-10-11 06:04"),
