@@ -1,0 +1,44 @@
+{
+ "data_git": [
+  {
+   "dirty": true,
+   "git_hash": "28e86fe28179cc665d6df4441dd2be0a459be8c7",
+   "slot_files": 928
+  },
+  {
+   "dirty": false,
+   "git_hash": "7cf0eea7b37a4c23763586f1bd9db6f160b35a2e",
+   "slot_files": 1220
+  }
+ ],
+ "data_root": "C:\\Users\\ebin\\claude-ground\\counterfactual-resampling\\results",
+ "generated": "2026-10-12T23:09:14Z",
+ "git": {
+  "dirty": false,
+  "git_hash": "eb30e22e4b7afa607f829e9039dde40829bc4015"
+ },
+ "include_exploratory": false,
+ "n_boot": 1000,
+ "n_exploratory": 0,
+ "n_perm": 10000,
+ "n_rows": 2148,
+ "n_slot_files": 2148,
+ "placebo": {
+  "solvable": {
+   "events": 60,
+   "n_perm": 1000,
+   "reject_025": 0.055,
+   "reject_05": 0.095,
+   "splits": 200
+  },
+  "unreachable": {
+   "events": 60,
+   "n_perm": 1000,
+   "reject_025": 0.0,
+   "reject_05": 0.04,
+   "splits": 200
+  }
+ },
+ "seed": 20261011,
+ "tables_sha256": "fc3a543f65f8f89b39df10145c0f2c1fa1dd365f264ed4a70da42210ea6ccd56"
+}
