@@ -129,7 +129,10 @@ only); prediction 4 did not hold.
 The run was interrupted twice by host power loss and once by an OpenRouter credit stop
 (HTTP 402) and resumed each time; damaged or lost slot files were re-run and no rule
 changed (protocol §15). Slot files were written at commits `28e86fe` (928) and `7cf0eea`
-(1,220); the tables were built at `eb30e22` (`results/tables_meta.json`). Agent cost
+(1,220); the tables were built at `eb30e22` (`results/tables_meta.json`). `28e86fe` differs from the
+PREREG commit `33db9bf` only in `PREREG.md`, `README.md` and protocol wording, and the
+"dirty" flag on those 928 files is `results/provider.log`, which was tracked and appended to
+during the run until `7cf0eea` untracked it. Agent cost
 $6.04 (`results/tables.md`); OpenRouter cash $6.54 (`results/run_log.jsonl`), under the
 $15 stop. A five-event exploratory pilot ran first and is excluded from every table.
 
